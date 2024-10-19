@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
+from tkinter import filedialog
 from typing import Any
 
 square_f = "\u25A3"
@@ -92,16 +93,48 @@ class Pokemon:
         return ret
 
 
+class PackLocations(bco):
+    animations: str | None
+    models: str | None
+    posers: str | None
+    resolvers: str | None
+
+    textures: str | None
+
+    lang: str | None
+
+    spawn_pool_world: str | None
+    species: str | None
+    species_additions: str | None
+    species_features: str | None
+    species_features_assignments: str | None
+
+
 class Pack:
     def __init__(
         self,
         zip_location: str | None = None,
         folder_location: str | None = None,
+        _extraction_path: str | None = None,
     ) -> None:
-        self.zip_location = zip_location
-        self.folder_location = folder_location
+        self.zip_location: str | None = zip_location
+        self.folder_location: str | None = folder_location
+
+        self._extraction_path: str | None = _extraction_path
+
+        self.component_location: PackLocations | None
 
         self.name: str
 
         self.pokemon: list[Pokemon] = []
         self.features: list[Feature] = []
+
+
+class Menu:
+    def __init__(self):
+        working_dir: str = ""
+
+    def __start(self):
+        dir_name = filedialog.askdirectory()
+
+        print(f"Selected folder: {dir_name}")
