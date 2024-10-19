@@ -372,6 +372,15 @@ class Pack:
                 print(f"\n\n{t}\n\n")
                 raise e
 
+    def display(self, pagination: int | None = None) -> None:
+        for i, p in enumerate(
+            sorted(self.pokemon.values(), key=lambda item: item.dex_id)
+        ):
+            print(p)
+            if (pagination is not None) and (not (i % pagination)) and i:
+                _ = input("Press any key to continue..")
+                print(f"\033[A\r{' '*40}\r\033[A", end="")
+
 
 class Menu:
     def __init__(self):
@@ -385,8 +394,6 @@ if __name__ == "__main__":
     working_dir = Path(
         "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/cobblemon-main"
     )
-
-    # working_dir = working_dir / "common" / "src" / "main" / "resources"
 
     p2 = Path(
         "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/AlolaMons_v1.3.zip"
@@ -406,8 +413,8 @@ if __name__ == "__main__":
     p._run()
     from pprint import pprint
 
-    for i in p.pokemon.values():
-        print(i)
+    p.display(10)
+
     print(len(p.pokemon.values()))
     # print(p.pokemon["tauros"])
     print(p.pokemon["vikavolt"].forms[0])
