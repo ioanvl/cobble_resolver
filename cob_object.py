@@ -183,6 +183,7 @@ class Pack:
         self._folder_setup()
         self._unpack()
         self._determine_base()
+        self._get_paths()
 
         self.name = self.folder_location.name
 
@@ -212,7 +213,7 @@ class Pack:
         with zipfile.ZipFile(str(self.zip_location), "r") as zip_ref:
             zip_ref.extractall(self.folder_location)
 
-    def _determine_base(self):
+    def _determine_base(self) -> None:
         if (
             (not (self.folder_location / "assets").exists())
             and (not (self.folder_location / "data").exists())
@@ -226,15 +227,6 @@ class Pack:
             self.folder_location / "kotlin"
         ).exists():
             self.is_base = True
-
-    # ============================================================
-
-    def _process(self) -> None:
-        print(f"Running pack: {self.name}")
-        self._get_paths()
-        self._get_features()
-        self._get_feature_assignments()
-        self._get_pokemon()
 
     def _get_paths(self) -> None:
         val = PackLocations()
@@ -287,6 +279,14 @@ class Pack:
             if (x := temp_data / "species_feature_assignments").exists():
                 val.species_features_assignments = x
         self.component_location = val
+
+    # ============================================================
+
+    def _process(self) -> None:
+        print(f"Running pack: {self.name}")
+        self._get_features()
+        self._get_feature_assignments()
+        self._get_pokemon()
 
     # ------------------------------------------------------------
 
@@ -344,6 +344,8 @@ class Pack:
     def _get_pokemon(self) -> None:
         self._get_data_species()
         self._get_data_spawn()
+
+    # ------------------------------------------------------------
 
     def _get_data_species(self) -> None:  # STEP 1
         """parse through species files"""
@@ -495,6 +497,8 @@ class Pack:
                 print(f"\n\n{in_spawn_file}\n\n")
                 raise e
 
+    # ------------------------------------------------------------
+
     def _get_looks_resolvers(self) -> None:  # STEP 2 #TODO
         """STEP 2 - parse through resolvers"""
         if (self.component_location is None) or (
@@ -517,6 +521,8 @@ class Pack:
             except Exception as e:
                 print(f"\n\n{t}\n\n")
                 raise e
+
+    # ============================================================
 
     def display(self, pagination: int | None = None) -> None:
         for i, p in enumerate(
@@ -556,8 +562,8 @@ if __name__ == "__main__":
 
     # print(working_dir)
 
-    # p = Pack(folder_location=working_dir)
-    p = Pack(zip_location=p4)
+    p = Pack(folder_location=working_dir)
+    # p = Pack(zip_location=p4)
 
     p._run()
     from pprint import pprint
