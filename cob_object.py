@@ -165,7 +165,7 @@ class Pack:
 
         self.component_location: PackLocations | None
 
-        self.name: str
+        self.name: str = ""
 
         self.pokemon: dict[str, Pokemon] = dict()
         self.features: dict[str, Feature] = dict()
@@ -183,6 +183,8 @@ class Pack:
         self._folder_setup()
         self._unpack()
         self._determine_base()
+
+        self.name = self.folder_location.name
 
     # ------------------------------------------------------------
 
@@ -228,6 +230,7 @@ class Pack:
     # ============================================================
 
     def _process(self) -> None:
+        print(f"Running pack: {self.name}")
         self._get_paths()
         self._get_features()
         self._get_feature_assignments()
@@ -254,7 +257,25 @@ class Pack:
                 val.lang = temp_assets / "lang"
             if (temp_assets / "textures" / "pokemon").exists():
                 val.textures = temp_assets / "textures" / "pokemon"
+
+        data_flag = False
         if (temp_data := self.folder_location / "data" / "cobblemon").exists():
+            data_flag = True
+        elif (temp_data := self.folder_location / "data").exists():
+            for candidate in temp_data.iterdir():
+                if candidate.is_dir():
+                    if (
+                        ((candidate / "spawn_pool_world").exists())
+                        or ((candidate / "species").exists())
+                        or ((candidate / "species_additions").exists())
+                        or ((candidate / "species_features").exists())
+                        or ((candidate / "species_feature_assignments").exists())
+                    ):
+                        temp_data = candidate
+                        data_flag = True
+                        break
+
+        if data_flag:
             if (x := temp_data / "spawn_pool_world").exists():
                 val.spawn_pool_world = x
             if (x := temp_data / "species").exists():
@@ -527,13 +548,16 @@ if __name__ == "__main__":
     p3 = Path(
         "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/Cobblemon-fabric-1.5.2+1.20.1.jar"
     )
+    p4 = Path(
+        "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/Dracomon_0.6.10.zip"
+    )
 
     from glob import glob
 
     # print(working_dir)
 
     # p = Pack(folder_location=working_dir)
-    p = Pack(zip_location=p2)
+    p = Pack(zip_location=p4)
 
     p._run()
     from pprint import pprint
@@ -542,6 +566,6 @@ if __name__ == "__main__":
 
     print(len(p.pokemon.values()))
     # print(p.pokemon["tauros"])
-    print(p.pokemon["vikavolt"].forms[0])
+    # print(p.pokemon["vikavolt"].forms[0])
     pprint(p.features.values())
     # pprint(p.feature_assignments)
