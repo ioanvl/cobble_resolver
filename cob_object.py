@@ -123,11 +123,11 @@ class Pokemon:
     dex_id: int | None = None
 
     features: list[str] = field(default_factory=list)
-    forms: list[PokemonForm] = field(default_factory=list)
+    forms: dict[str, PokemonForm] = field(default_factory=dict)
 
     def __repr__(self) -> str:
         ret: str = f"#{self.dex_id} - {self.name if self.name is not None else self.internal_name}"
-        for f in self.forms:
+        for f in self.forms.values():
             ret += "\n"
             ret += repr(f)
         return ret
@@ -377,21 +377,17 @@ class Pack:
                     features=data.get("features", list()),
                 )
 
-                pok.forms.append(
-                    PokemonForm(
-                        name="base_form",
-                        species=bcfo(file_path=t, source=data),
-                    )
+                pok.forms["base_form"] = PokemonForm(
+                    name="base_form",
+                    species=bcfo(file_path=t, source=data),
                 )
 
                 forms: list = data.get("forms", list())
                 for i_form in forms:
-                    pok.forms.append(
-                        PokemonForm(
-                            name=i_form["name"],
-                            aspects=(i_form.get("aspects", list())),
-                            species=bcfo(file_path=t, source=i_form),
-                        )
+                    pok.forms[i_form["name"]] = PokemonForm(
+                        name=i_form["name"],
+                        aspects=(i_form.get("aspects", list())),
+                        species=bcfo(file_path=t, source=i_form),
                     )
 
                 self.pokemon[pok.internal_name] = pok
@@ -432,12 +428,12 @@ class Pack:
                     internal_name=target,
                     dex_id=data.get("nationalPokedexNumber", -1),
                     features=data.get("features", list()),
-                    forms=[
-                        PokemonForm(
+                    forms={
+                        "base_form": PokemonForm(
                             name="base_form",
                             species_additions=bcfo(file_path=t, source=data),
                         )
-                    ],
+                    },
                 )
 
                 forms: list = data.get("forms", list())
@@ -496,7 +492,7 @@ class Pack:
                         self.pokemon[pok_name] = Pokemon(
                             internal_name=pok_name,
                             dex_id=-1,
-                            forms=[PokemonForm(name="base_form")],
+                            forms={"base_form": PokemonForm(name="base_form")},
                         )
 
                     flag = False
@@ -529,16 +525,18 @@ class Pack:
                         else:
                             aspect = feat_parts[0]
 
-                        for form in self.pokemon[pok_name].forms:
+                        for form in self.pokemon[pok_name].forms.values():
                             if aspect in form.aspects:
                                 form.spawn_pool.append(in_spawn_file)
                                 form.spawn_pool = list(set(form.spawn_pool))
                                 flag = True
                                 break
                     if not flag:
-                        self.pokemon[pok_name].forms[0].spawn_pool.append(in_spawn_file)
-                        self.pokemon[pok_name].forms[0].spawn_pool = list(
-                            set(self.pokemon[pok_name].forms[0].spawn_pool)
+                        self.pokemon[pok_name].forms["base_form"].spawn_pool.append(
+                            in_spawn_file
+                        )
+                        self.pokemon[pok_name].forms["base_form"].spawn_pool = list(
+                            set(self.pokemon[pok_name].forms["base_form"].spawn_pool)
                         )
 
                 # ---------------
@@ -612,8 +610,8 @@ if __name__ == "__main__":
         "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/z_AllTheMons-Release4-Version55.zip"
     )
 
-    p = Pack(folder_location=working_dir)
-    # p = Pack(zip_location=p5)
+    # p = Pack(folder_location=working_dir)
+    p = Pack(zip_location=p5)
 
     p._run()
     from pprint import pprint
