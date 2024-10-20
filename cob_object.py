@@ -464,18 +464,25 @@ class Pack:
                             feat_name: str = feat_parts[0]
                             feat_choice: str = feat_parts[1]
 
-                            selected = ""
-                            if feat_name in self.features:
-                                selected = self.features[feat_name].source[
-                                    "aspectFormat"
-                                ]
+                            if feat_choice.lower() in [
+                                "true",
+                                "false",
+                            ]:  # fix for some dumb stuff
+                                if feat_choice.lower() == "true":
+                                    aspect = feat_parts[0]
                             else:
-                                for val in self.features.values():
-                                    if feat_name in val.keys:
-                                        selected = val.source["aspectFormat"]
-                                        break
-                            if selected:
-                                aspect = selected.replace("{{choice}}", feat_choice)
+                                selected = ""
+                                if feat_name in self.features:
+                                    selected = self.features[feat_name].source[
+                                        "aspectFormat"
+                                    ]
+                                else:
+                                    for val in self.features.values():
+                                        if feat_name in val.keys:
+                                            selected = val.source["aspectFormat"]
+                                            break
+                                if selected:
+                                    aspect = selected.replace("{{choice}}", feat_choice)
                         else:
                             aspect = feat_parts[0]
 
@@ -558,12 +565,16 @@ if __name__ == "__main__":
         "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/Dracomon_0.6.10.zip"
     )
 
+    p5 = Path(
+        "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/z_AllTheMons-Release4-Version55.zip"
+    )
+
     from glob import glob
 
     # print(working_dir)
 
     p = Pack(folder_location=working_dir)
-    # p = Pack(zip_location=p4)
+    # p = Pack(zip_location=p5)
 
     p._run()
     from pprint import pprint
