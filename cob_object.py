@@ -7,6 +7,8 @@ import json
 import zipfile
 import os
 
+DEBUG = False
+
 square_f = "\u25a3"
 square_e = "\u25a1"
 
@@ -33,6 +35,7 @@ class Feature(bcfo):
     name: str
     keys: list[str]
     feat_type: FeatureType
+    aspect: bool
 
     # duplicate: bool = False
 
@@ -46,20 +49,25 @@ class FeatureAssignment(bcfo):
 
 
 @dataclass
-class SpawnEntry(bcfo):
-    id: str
+class SpawnEntry:
+    file_path: Path
+
+
+@dataclass
+class ResolverEntry(bcfo):
+    order: int
 
 
 @dataclass
 class PokemonForm:
     name: str
 
-    aspect: list[str] = field(default_factory=list)
+    aspects: list[str] = field(default_factory=list)
     # looks
+    resolvers: list[ResolverEntry] = field(default_factory=list)
     animation: bcfo | None = None
     model: bcfo | None = None
     poser: bcfo | None = None
-    resolver: bcfo | None = None
 
     texture: str | None = None
     texture_shiny: str | None = None
@@ -68,7 +76,7 @@ class PokemonForm:
     species: bcfo | None = None
     species_additions: bcfo | None = None
 
-    spawn_pool: list[SpawnEntry] = field(default_factory=list)
+    spawn_pool: list[Path] = field(default_factory=list)
 
     def __repr__(self) -> str:
         s: str = f"{' '*(3 if (self.name != 'base_form') else 0)}|"
@@ -83,16 +91,17 @@ class PokemonForm:
             (self.animation is None)
             and (self.model is None)
             and (self.poser is None)
-            and (self.resolver is None)
+            and (not self.resolvers)
             and (self.texture is None)
             and (self.texture_shiny is None)
             and (not self.textures_extra)
         ):
             ret += f"\n{s} "
-            ret += f"LOOKS: Anim:{self.__square_atr(self.animation)} "
+            ret += "LOOKS: "
+            ret += f"Res:{bool_square(len(self.spawn_pool))} "
+            ret == f"Anim:{self.__square_atr(self.animation)} "
             ret += f"Mod:{self.__square_atr(self.model)} "
             ret += f"Pos:{self.__square_atr(self.poser)} "
-            ret += f"Res:{self.__square_atr(self.resolver)} "
             ret += f"  T:{self.__square_atr(self.texture)} "
             ret += f"Ts:{self.__square_atr(self.texture_shiny)} "
             ret += (
@@ -159,12 +168,12 @@ class Pack:
         self.name: str
 
         self.pokemon: dict[str, Pokemon] = dict()
-        self.features: list[Feature] = list()
+        self.features: dict[str, Feature] = dict()
         self.feature_assignments: list[FeatureAssignment] = list()
 
         self.is_base: bool = False
 
-    def _run(self):
+    def _run(self) -> None:
         self._prepare()
         self._process()
 
@@ -260,7 +269,7 @@ class Pack:
 
     # ------------------------------------------------------------
 
-    def _get_features(self) -> None:
+    def _get_features(self) -> None:  # STEP 0
         if (self.component_location is None) or (
             self.component_location.species_features is None
         ):
@@ -270,17 +279,16 @@ class Pack:
             if t.suffix == ".json":
                 with t.open() as f:
                     data = json.load(f)
-                self.features.append(
-                    Feature(
-                        name=t.stem,
-                        keys=data.get("keys", list()),
-                        feat_type=FeatureType(data.get("type", "flag")),
-                        file_path=t,
-                        source=data,
-                    )
+                self.features[t.stem] = Feature(
+                    name=t.stem,
+                    keys=data.get("keys", list()),
+                    feat_type=FeatureType(data.get("type", "flag")),
+                    aspect=data.get("isAspect", False),
+                    file_path=t,
+                    source=data,
                 )
 
-    def _get_feature_assignments(self) -> None:
+    def _get_feature_assignments(self) -> None:  # STEP 0b #TODO
         if (self.component_location is None) or (
             self.component_location.species_features_assignments is None
         ):
@@ -299,6 +307,10 @@ class Pack:
                     FeatureAssignment(file_path=t, source=data, name=t.stem)
                 )
 
+                # ---------------
+                # process?
+                # ---------------
+
             except Exception as e:
                 print(f"\n\n{t}\n\n")
                 raise e
@@ -307,8 +319,10 @@ class Pack:
 
     def _get_pokemon(self) -> None:
         self._get_data_species()
+        self._get_data_spawn()
 
-    def _get_data_species(self) -> None:
+    def _get_data_species(self) -> None:  # STEP 1
+        """parse through species files"""
         if (self.component_location is None) or (
             self.component_location.species is None
         ):
@@ -320,6 +334,9 @@ class Pack:
                     with t.open() as f:
                         data = json.load(f)
                 except UnicodeDecodeError as _:
+                    if DEBUG:
+                        print(f"WARN!! - {t}")
+                        _ = input()
                     continue
                 pok = Pokemon(
                     internal_name=t.stem,
@@ -340,7 +357,7 @@ class Pack:
                     pok.forms.append(
                         PokemonForm(
                             name=i_form["name"],
-                            aspect=(i_form.get("aspects", list())),
+                            aspects=(i_form.get("aspects", list())),
                             species=bcfo(file_path=t, source=i_form),
                         )
                     )
@@ -350,13 +367,112 @@ class Pack:
                 print(f"\n\n{t}\n\n")
                 raise e
 
-    def _get_data_spawn(self) -> None:
+    def _get_data_species_additions(self) -> None:  # STEP 1b #TODO
+        if (self.component_location is None) or (
+            self.component_location.species_additions is None
+        ):
+            return
+
+        for t in self.component_location.species_additions.rglob("*.json"):
+            try:
+                try:
+                    with t.open() as f:
+                        data = json.load(f)
+                except UnicodeDecodeError as _:
+                    continue
+
+                # ---------------
+                # ---------------
+                # ---------------
+
+            except Exception as e:
+                print(f"\n\n{t}\n\n")
+                raise e
+
+    def _get_data_spawn(self) -> None:  # STEP 1c
         if (self.component_location is None) or (
             self.component_location.spawn_pool_world is None
         ):
             return
 
-        for t in self.component_location.spawn_pool_world.rglob("*.json"):
+        for in_spawn_file in self.component_location.spawn_pool_world.rglob("*.json"):
+            try:
+                try:
+                    with in_spawn_file.open() as f:
+                        data = json.load(f)
+                except UnicodeDecodeError as _:
+                    if DEBUG:
+                        print(f"WARN!! - {in_spawn_file}")
+                        _ = input()
+                    continue
+
+                # ---------------
+                spawns = data.get("spawns", list())
+
+                for spawn_entry in spawns:
+                    pok: str = spawn_entry["pokemon"]
+                    pok_parts: list[str] = pok.split(" ")
+                    pok_name: str = pok_parts[0]
+
+                    if pok_name not in self.pokemon:
+                        if DEBUG:
+                            print(f"WARN!! - {pok_name}, not found")
+                            _ = input()
+                        self.pokemon[pok_name] = Pokemon(
+                            internal_name=pok_name,
+                            dex_id=-1,
+                            forms=[PokemonForm(name="base_form")],
+                        )
+
+                    flag = False
+                    if len(pok_parts) > 1:
+                        feat_parts: list[str] = pok_parts[1].split("=")
+
+                        if len(feat_parts) > 1:  # choice
+                            feat_name: str = feat_parts[0]
+                            feat_choice: str = feat_parts[1]
+
+                            selected = ""
+                            if feat_name in self.features:
+                                selected = self.features[feat_name].source[
+                                    "aspectFormat"
+                                ]
+                            else:
+                                for val in self.features.values():
+                                    if feat_name in val.keys:
+                                        selected = val.source["aspectFormat"]
+                                        break
+                            if selected:
+                                aspect = selected.replace("{{choice}}", feat_choice)
+                        else:
+                            aspect = feat_parts[0]
+
+                        for form in self.pokemon[pok_name].forms:
+                            if aspect in form.aspects:
+                                form.spawn_pool.append(in_spawn_file)
+                                form.spawn_pool = list(set(form.spawn_pool))
+                                flag = True
+                                break
+                    if not flag:
+                        self.pokemon[pok_name].forms[0].spawn_pool.append(in_spawn_file)
+                        self.pokemon[pok_name].forms[0].spawn_pool = list(
+                            set(self.pokemon[pok_name].forms[0].spawn_pool)
+                        )
+
+                # ---------------
+
+            except Exception as e:
+                print(f"\n\n{in_spawn_file}\n\n")
+                raise e
+
+    def _get_looks_resolvers(self) -> None:  # STEP 2 #TODO
+        """STEP 2 - parse through resolvers"""
+        if (self.component_location is None) or (
+            self.component_location.resolvers is None
+        ):
+            return
+
+        for t in self.component_location.resolvers.rglob("*.json"):
             try:
                 try:
                     with t.open() as f:
@@ -418,5 +534,5 @@ if __name__ == "__main__":
     print(len(p.pokemon.values()))
     # print(p.pokemon["tauros"])
     print(p.pokemon["vikavolt"].forms[0])
-    pprint(p.features)
+    pprint(p.features.values())
     # pprint(p.feature_assignments)
