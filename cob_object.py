@@ -185,7 +185,11 @@ class Pack:
         self._determine_base()
         self._get_paths()
 
-        self.name = self.folder_location.name
+        self.name = (
+            "BASE"
+            if (self.is_base and (self.folder_location.name == "resources"))
+            else self.folder_location.name
+        )
 
     # ------------------------------------------------------------
 
@@ -409,10 +413,49 @@ class Pack:
                     with t.open() as f:
                         data = json.load(f)
                 except UnicodeDecodeError as _:
+                    if DEBUG:
+                        print(f"WARN!! - {t}")
+                        _ = input()
                     continue
 
                 # ---------------
-                # ---------------
+                target = (str(data["target"])).split(":")[1]
+
+                if target not in self.pokemon:
+                    self.pokemon[target] = Pokemon(
+                        internal_name=target,
+                        dex_id=data.get("nationalPokedexNumber", -1),
+                        features=data.get("features", list()),
+                    )
+
+                tpok = Pokemon(
+                    internal_name=target,
+                    dex_id=data.get("nationalPokedexNumber", -1),
+                    features=data.get("features", list()),
+                    forms=[
+                        PokemonForm(
+                            name="base_form",
+                            species_additions=bcfo(file_path=t, source=data),
+                        )
+                    ],
+                )
+
+                forms: list = data.get("forms", list())
+                for i_form in forms:
+                    pok.forms.append(
+                        PokemonForm(
+                            name=i_form["name"],
+                            aspects=(i_form.get("aspects", list())),
+                            species=bcfo(file_path=t, source=i_form),
+                        )
+                    )
+
+                pok = Pokemon(
+                    internal_name=t.stem,
+                    name=data["name"],
+                    dex_id=data["nationalPokedexNumber"],
+                    features=data.get("features", list()),
+                )
                 # ---------------
 
             except Exception as e:
@@ -568,10 +611,6 @@ if __name__ == "__main__":
     p5 = Path(
         "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/z_AllTheMons-Release4-Version55.zip"
     )
-
-    from glob import glob
-
-    # print(working_dir)
 
     p = Pack(folder_location=working_dir)
     # p = Pack(zip_location=p5)
