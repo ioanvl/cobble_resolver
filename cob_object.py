@@ -495,7 +495,7 @@ class Pack:
             print(p)
             if (pagination is not None) and (not (i % pagination)) and i:
                 _ = input("Press any key to continue..")
-                print(f"\033[A\r{' '*40}\r\033[A", end="")
+                print(f"\033[A\r{' '*40}\r", end="")
 
 
 class Menu:
