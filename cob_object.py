@@ -4,6 +4,7 @@ from pathlib import Path
 from tkinter import filedialog
 from typing import Any
 import json
+from json import JSONDecodeError
 import zipfile
 import os
 
@@ -289,7 +290,6 @@ class Pack:
     def _process(self) -> None:
         print(f"Running pack: {self.name}")
         self._get_features()
-        self._get_feature_assignments()
         self._get_pokemon()
 
     # ------------------------------------------------------------
@@ -347,6 +347,10 @@ class Pack:
 
     def _get_pokemon(self) -> None:
         self._get_data_species()
+        self._get_data_species_additions()
+
+        self._get_feature_assignments()
+
         self._get_data_spawn()
 
     # ------------------------------------------------------------
@@ -365,7 +369,7 @@ class Pack:
                 try:
                     with t.open() as f:
                         data = json.load(f)
-                except UnicodeDecodeError as _:
+                except (UnicodeDecodeError, JSONDecodeError) as _:
                     if DEBUG:
                         print(f"WARN!! - {t}")
                         _ = input()
@@ -375,11 +379,13 @@ class Pack:
                     name=data["name"],
                     dex_id=data["nationalPokedexNumber"],
                     features=data.get("features", list()),
-                )
-
-                pok.forms["base_form"] = PokemonForm(
-                    name="base_form",
-                    species=bcfo(file_path=t, source=data),
+                    forms={
+                        "base_form": PokemonForm(
+                            name="base_form",
+                            aspects=(data.get("aspects", list())),
+                            species=bcfo(file_path=t, source=data),
+                        )
+                    },
                 )
 
                 forms: list = data.get("forms", list())
@@ -395,7 +401,7 @@ class Pack:
                 print(f"\n\n{t}\n\n")
                 raise e
 
-    def _get_data_species_additions(self) -> None:  # STEP 1b #TODO
+    def _get_data_species_additions(self) -> None:  # STEP 1b
         if (self.component_location is None) or (
             self.component_location.species_additions is None
         ):
@@ -408,50 +414,58 @@ class Pack:
                 try:
                     with t.open() as f:
                         data = json.load(f)
-                except UnicodeDecodeError as _:
+                except (UnicodeDecodeError, JSONDecodeError) as _:
                     if DEBUG:
                         print(f"WARN!! - {t}")
                         _ = input()
                     continue
 
                 # ---------------
-                target = (str(data["target"])).split(":")[1]
+                target_parts: str = (str(data["target"])).split(":")
+                if len(target_parts) > 1:
+                    target = target_parts[1]
+                else:
+                    target = target_parts[0]
 
                 if target not in self.pokemon:
                     self.pokemon[target] = Pokemon(
                         internal_name=target,
                         dex_id=data.get("nationalPokedexNumber", -1),
                         features=data.get("features", list()),
+                        forms={
+                            "base_form": PokemonForm(
+                                name="base_form",
+                                aspects=data.get("aspects", list()),
+                                species_additions=bcfo(file_path=t, source=data),
+                            )
+                        },
                     )
-
-                tpok = Pokemon(
-                    internal_name=target,
-                    dex_id=data.get("nationalPokedexNumber", -1),
-                    features=data.get("features", list()),
-                    forms={
-                        "base_form": PokemonForm(
-                            name="base_form",
-                            species_additions=bcfo(file_path=t, source=data),
-                        )
-                    },
-                )
+                else:
+                    self.pokemon[target].features.extend(data.get("features", list()))
+                    self.pokemon[target].forms["base_form"].species_additions = bcfo(
+                        file_path=t, source=data
+                    )
+                    self.pokemon[target].forms["base_form"].aspects.extend(
+                        data.get("aspects", list())
+                    )
 
                 forms: list = data.get("forms", list())
                 for i_form in forms:
-                    pok.forms.append(
-                        PokemonForm(
-                            name=i_form["name"],
-                            aspects=(i_form.get("aspects", list())),
-                            species=bcfo(file_path=t, source=i_form),
+                    form_name = i_form["name"]
+                    if form_name not in self.pokemon[target].forms:
+                        self.pokemon[target].forms[form_name] = PokemonForm(
+                            name=form_name,
+                            aspects=i_form.get("aspects", list()),
+                            species_additions=bcfo(file_path=t, source=i_form),
                         )
-                    )
+                    else:
+                        self.pokemon[target].forms[form_name].species_additions = bcfo(
+                            file_path=t, source=i_form
+                        )
+                        self.pokemon[target].forms[form_name].aspects.extend(
+                            i_form.get("aspects", list())
+                        )
 
-                pok = Pokemon(
-                    internal_name=t.stem,
-                    name=data["name"],
-                    dex_id=data["nationalPokedexNumber"],
-                    features=data.get("features", list()),
-                )
                 # ---------------
 
             except Exception as e:
