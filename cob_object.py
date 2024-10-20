@@ -390,7 +390,7 @@ class Pack:
 
                 forms: list = data.get("forms", list())
                 for i_form in forms:
-                    pok.forms[i_form["name"]] = PokemonForm(
+                    pok.forms[(str(i_form["name"])).lower()] = PokemonForm(
                         name=i_form["name"],
                         aspects=(i_form.get("aspects", list())),
                         species=bcfo(file_path=t, source=i_form),
@@ -451,7 +451,7 @@ class Pack:
 
                 forms: list = data.get("forms", list())
                 for i_form in forms:
-                    form_name = i_form["name"]
+                    form_name = (str(i_form["name"])).lower()
                     if form_name not in self.pokemon[target].forms:
                         self.pokemon[target].forms[form_name] = PokemonForm(
                             name=form_name,
@@ -523,6 +523,21 @@ class Pack:
                             ]:  # fix for some dumb stuff
                                 if feat_choice.lower() == "true":
                                     aspect = feat_parts[0]
+                            elif feat_name.lower() == "form":  # fix other dumb stuff
+                                if feat_choice.lower() in self.pokemon[pok_name].forms:
+                                    self.pokemon[pok_name].forms[
+                                        feat_choice.lower()
+                                    ].spawn_pool.append(in_spawn_file)
+                                    self.pokemon[pok_name].forms[
+                                        feat_choice.lower()
+                                    ].spawn_pool = list(
+                                        set(
+                                            self.pokemon[pok_name]
+                                            .forms[feat_choice.lower()]
+                                            .spawn_pool
+                                        )
+                                    )
+                                    continue
                             else:
                                 selected = ""
                                 if feat_name in self.features:
@@ -635,5 +650,5 @@ if __name__ == "__main__":
     print(len(p.pokemon.values()))
     # print(p.pokemon["tauros"])
     # print(p.pokemon["vikavolt"].forms[0])
-    pprint(p.features.values())
+    pprint(list(p.features.values()))
     # pprint(p.feature_assignments)
