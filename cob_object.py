@@ -273,7 +273,9 @@ class Pack:
         if (self.component_location is None) or (
             self.component_location.species_features is None
         ):
+            print("-- No Features")
             return
+        print("-- Parsing Features")
 
         for t in self.component_location.species_features.iterdir():
             if t.suffix == ".json":
@@ -292,8 +294,9 @@ class Pack:
         if (self.component_location is None) or (
             self.component_location.species_features_assignments is None
         ):
-            print("NO FA")
+            print("-- No Feature Assignments")
             return
+        print("-- Parsing Feature Assignments")
 
         for t in self.component_location.species_features_assignments.rglob("*.json"):
             try:
@@ -326,7 +329,9 @@ class Pack:
         if (self.component_location is None) or (
             self.component_location.species is None
         ):
+            print("-- No Species")
             return
+        print("-- Parsing Species")
 
         for t in self.component_location.species.rglob("*.json"):
             try:
@@ -371,7 +376,9 @@ class Pack:
         if (self.component_location is None) or (
             self.component_location.species_additions is None
         ):
+            print("-- No Species Additions")
             return
+        print("-- Parsing Species Additions")
 
         for t in self.component_location.species_additions.rglob("*.json"):
             try:
@@ -393,7 +400,9 @@ class Pack:
         if (self.component_location is None) or (
             self.component_location.spawn_pool_world is None
         ):
+            print("-- No Spawn Data")
             return
+        print("-- Parsing Spawn Data")
 
         for in_spawn_file in self.component_location.spawn_pool_world.rglob("*.json"):
             try:
@@ -523,8 +532,8 @@ if __name__ == "__main__":
 
     # print(working_dir)
 
-    p = Pack(folder_location=working_dir)
-    # p = Pack(zip_location=p2)
+    # p = Pack(folder_location=working_dir)
+    p = Pack(zip_location=p2)
 
     p._run()
     from pprint import pprint
