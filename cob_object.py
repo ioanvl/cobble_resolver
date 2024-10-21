@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from tkinter import filedialog
-from typing import Any
+from typing import Any, LiteralString
 import json
 from json import JSONDecodeError
 import zipfile
@@ -55,19 +55,21 @@ class SpawnEntry:
 
 
 @dataclass
-class ResolverEntry(bcfo):
+class ResolverEntry:
     order: int
-    textures: list[Path] = field(default_factory=list)
-    models: list[Path] = field(default_factory=list)
-    posers: list[Path] = field(default_factory=list)
-    animations: list[Path] = field(default_factory=list)
+    textures: set[Path] = field(default_factory=set)
+    models: set[Path] = field(default_factory=set)
+    posers: set[Path] = field(default_factory=set)
+    animations: set[Path] = field(default_factory=set)
 
     has_shiny: bool = False
 
-    requested_animations: list[str] = field(default_factory=list)
-    present_animations: list[str] = field(default_factory=list)
+    aspects: set[str] = field(default_factory=set)
 
-    def __repr__(self):
+    requested_animations: set[str] = field(default_factory=set)
+    present_animations: set[str] = field(default_factory=set)
+
+    def __repr__(self) -> str:
         res: str = ""
         res += f"M:{bool_square(len(self.models))} | "
 
@@ -77,6 +79,8 @@ class ResolverEntry(bcfo):
         res += f"T:{bool_square(len(self.textures))} "
         res += f"Ts:{bool_square(self.has_shiny)} "
 
+        return res
+
 
 @dataclass
 class PokemonForm:
@@ -84,7 +88,7 @@ class PokemonForm:
 
     aspects: list[str] = field(default_factory=list)
     # looks
-    resolver_assignments: list[int] = field(default_factory=list)
+    resolver_assignments: set[int] = field(default_factory=set)
 
     species: bcfo | None = None
     species_additions: bcfo | None = None
@@ -92,17 +96,20 @@ class PokemonForm:
     spawn_pool: list[Path] = field(default_factory=list)
 
     def __repr__(self) -> str:
-        s: str = f"{' '*(3 if (self.name != 'base_form') else 0)}|"
+        s: str = self._st()
         ret: str = ""
         if self.name != "base_form":
             ret += f"{s} {self.name}\n"
         ret += f"{s} "
         ret += f"DATA: Spawn:{bool_square(len(self.spawn_pool))} | "
-        ret += f"S:{self.__square_atr(self.species)}/{self.__square_atr(self.species_additions)}:SA | "
-        ret += f"LOOKS: {bool_square(len(self.resolver_assignments))}"
+        ret += f"S:{self.__square_atr(self.species)}/{self.__square_atr(self.species_additions)}:SA "
+        # ret += f"| LOOKS: {bool_square(len(self.resolver_assignments))}"
 
         ret += f"\n{s} {'-' * 10}"
         return ret
+
+    def _st(self) -> LiteralString:
+        return f"{' '*(3 if (self.name != 'base_form') else 0)}|"
 
     def __square_atr(self, val: Any) -> str:
         return bool_square(val is not None)
@@ -127,26 +134,53 @@ class Pokemon:
 
         for f in self.forms.values():
             ret += "\n"
-            ret += repr(f)
+            pok_f: str = repr(f)
+            if len(f.resolver_assignments):
+                p_parts = pok_f.split("\n")
+                p_parts.append(p_parts[-1])
+                p_parts[-2] = (
+                    f"{f._st()} {repr(self.resolvers[list(f.resolver_assignments)[0]])}"
+                )
+                pok_f = "\n".join(p_parts)
+            ret += pok_f
         return ret
 
 
 @dataclass
 class PackLocations:
-    animations: Path | None = None
-    models: Path | None = None
-    posers: Path | None = None
     resolvers: Path | None = None
-
+    models: Path | None = None
     textures: Path | None = None
+    animations: Path | None = None
+    posers: Path | None = None
 
     lang: Path | None = None
 
-    spawn_pool_world: Path | None = None
     species: Path | None = None
     species_additions: Path | None = None
+    spawn_pool_world: Path | None = None
     species_features: Path | None = None
     species_features_assignments: Path | None = None
+
+    posers_dict: dict[str, Path] = field(default_factory=dict)
+    models_dict: dict[str, Path] = field(default_factory=dict)
+    textures_dict: dict[str, Path] = field(default_factory=dict)
+
+    def __repr__(self) -> str:
+        res: str = ""
+        res += f"Sp:{bool_square(self.spawn_pool_world)} "
+        res += f"S:{bool_square(self.species)} "
+        res += f"SA:{bool_square(self.species_additions)} | "
+
+        res += f"F:{bool_square(self.species_features)} "
+        res += f"FA:{bool_square(self.species_features_assignments)} | "
+
+        res += f"R:{bool_square(self.resolvers)} "
+        res += f"M:{bool_square(self.models)} "
+        res += f"T:{bool_square(self.textures)} "
+        res += f"P:{bool_square(self.posers)} "
+        res += f"A:{bool_square(self.animations)} "
+        return res
 
 
 class Pack:
@@ -158,7 +192,6 @@ class Pack:
     ) -> None:
         self.zip_location: Path | None = zip_location
         self.folder_location: Path | None = folder_location
-
         self._extraction_path: Path | None = _extraction_path
 
         self.component_location: PackLocations | None
@@ -170,6 +203,7 @@ class Pack:
         self.feature_assignments: list[FeatureAssignment] = list()
 
         self.is_base: bool = False
+        self.is_mod: bool = False
 
     def _run(self) -> None:
         self._prepare()
@@ -187,6 +221,10 @@ class Pack:
             "BASE"
             if (self.is_base and (self.folder_location.name == "resources"))
             else self.folder_location.name
+        )
+
+        print(
+            f"{self.name}  -  Mod:{bool_square(self.is_mod)} BASE:{bool_square(self.is_base)}\n {repr(self.component_location)}"
         )
 
     # ------------------------------------------------------------
@@ -225,10 +263,12 @@ class Pack:
             self.folder_location = (
                 self.folder_location / "common" / "src" / "main" / "resources"
             )
-        if (not (self.folder_location / "pack.mcmeta").exists()) and (
-            self.folder_location / "kotlin"
-        ).exists():
-            self.is_base = True
+        if (self.folder_location / "LICENSE").exists():
+            self.is_mod = True
+
+            check = [c for c in self.folder_location.rglob("*cobblemon-common*")]
+            if len(check):
+                self.is_base = True
 
     def _get_paths(self) -> None:
         val = PackLocations()
@@ -350,6 +390,8 @@ class Pack:
 
         self._get_data_spawn()
 
+        self._get_looks_resolvers()
+
     # ------------------------------------------------------------
 
     def _get_data_species(self) -> None:  # STEP 1
@@ -374,7 +416,7 @@ class Pack:
                 pok = Pokemon(
                     internal_name=t.stem,
                     name=data["name"],
-                    dex_id=data["nationalPokedexNumber"],
+                    dex_id=data.get("nationalPokedexNumber", -1),
                     features=data.get("features", list()),
                     forms={
                         "base_form": PokemonForm(
@@ -482,7 +524,7 @@ class Pack:
                 try:
                     with in_spawn_file.open() as f:
                         data = json.load(f)
-                except UnicodeDecodeError as _:
+                except (UnicodeDecodeError, JSONDecodeError) as _:
                     if DEBUG:
                         print(f"WARN!! - {in_spawn_file}")
                         _ = input()
@@ -578,23 +620,137 @@ class Pack:
         if (self.component_location is None) or (
             self.component_location.resolvers is None
         ):
+            print("-- No Resolver Data")
             return
+        print("-- Parsing Resolver Data")
+
+        for t in self.component_location.posers.rglob("*.json"):
+            self.component_location.posers_dict[t.stem] = t
+
+        for t in self.component_location.models.rglob("*.json"):
+            self.component_location.models_dict[t.stem] = t
+
+        for t in self.component_location.textures.rglob("*.png"):
+            self.component_location.textures_dict[t.stem] = t
 
         for t in self.component_location.resolvers.rglob("*.json"):
             try:
                 try:
                     with t.open() as f:
                         data = json.load(f)
-                except UnicodeDecodeError as _:
+                except (UnicodeDecodeError, JSONDecodeError) as _:
+                    if DEBUG:
+                        print(f"WARN!! - {t}")
+                        _ = input()
                     continue
 
                 # ---------------
-                # ---------------
+                pok_name: str = str(data["species"]).split(":")[-1]
+
+                if pok_name not in self.pokemon:
+                    self.pokemon[pok_name] = Pokemon(
+                        internal_name=pok_name,
+                        dex_id=-1,
+                        forms={"base_form": PokemonForm(name="base_form")},
+                    )
+
+                order = data.get("order", -1)
+                if order in list(self.pokemon[pok_name].resolvers.keys()):
+                    # if for some reason theres a duplicate key, give it a new negative one
+                    order = (
+                        min(min(list(self.pokemon[pok_name].resolvers.keys())), 0) - 1
+                    )
+
+                new_resolver_entry = ResolverEntry(order=order)
+                aspects: list[str] = list()
+
+                for v in data.get("variations", list()):
+                    new_resolver_entry = self._resolver_variation_or_layer(
+                        entry=v, existing_resolver=new_resolver_entry
+                    )
+                    v_aspects = v.get("aspects", list())
+                    aspects.extend(v_aspects)
+
+                aspects = list(set(aspects))
+
+                if "shiny" in aspects:
+                    new_resolver_entry.has_shiny = True
+                    aspects.remove("shiny")
+
+                flag = False
+                for asp in aspects:
+                    for form in self.pokemon[pok_name].forms.values():
+                        if asp in form.aspects:
+                            form.resolver_assignments.add(order)
+                            flag = True
+                if not flag:
+                    self.pokemon[pok_name].forms["base_form"].resolver_assignments.add(
+                        order
+                    )
+                self.pokemon[pok_name].resolvers[order] = new_resolver_entry
+
                 # ---------------
 
             except Exception as e:
                 print(f"\n\n{t}\n\n")
                 raise e
+
+    def _resolver_variation_or_layer(
+        self, entry: dict, existing_resolver: ResolverEntry
+    ) -> ResolverEntry:
+        if x := entry.get("poser", ""):
+            poser_name: str = str(x).split(":")[-1]
+            if (
+                epath := self.component_location.posers / f"{poser_name}.json"
+            ).exists():
+                existing_resolver.posers.add(epath)
+                if poser_name in self.component_location.posers_dict:
+                    del self.component_location.posers_dict[poser_name]
+            else:
+                if poser_name in self.component_location.posers_dict:
+                    existing_resolver.posers.add(
+                        self.component_location.posers_dict[poser_name]
+                    )
+                    del self.component_location.posers_dict[poser_name]
+
+        if x := entry.get("model", ""):
+            model_name: str = str(x).split(":")[-1]
+            if (
+                epath := self.component_location.models / f"{model_name}.json"
+            ).exists():
+                existing_resolver.models.add(epath)
+                if model_name in self.component_location.models_dict:
+                    del self.component_location.models_dict[model_name]
+            else:
+                if model_name in self.component_location.models_dict:
+                    existing_resolver.models.add(
+                        self.component_location.models_dict[model_name]
+                    )
+                    del self.component_location.models_dict[model_name]
+
+        if x := entry.get("texture", ""):
+            parts: list[str] = str(x).split("/")
+            if "pokemon" in parts:
+                index = parts.index("pokemon")
+                partial_path = "/".join(parts[index + 1 :])
+
+                if (epath := self.component_location.textures / partial_path).exists():
+                    existing_resolver.textures.add(epath)
+                    if epath.stem in self.component_location.textures_dict:
+                        del self.component_location.textures_dict[epath.stem]
+                else:
+                    if parts[-1] in self.component_location.textures_dict:
+                        existing_resolver.textures.add(
+                            self.component_location.textures_dict[parts[-1]]
+                        )
+                        del self.component_location.textures_dict[parts[-1]]
+
+        for layer in entry.get("layers", list()):
+            existing_resolver = self._resolver_variation_or_layer(
+                entry=layer, existing_resolver=existing_resolver
+            )
+
+        return existing_resolver
 
     # ============================================================
 
@@ -632,15 +788,23 @@ if __name__ == "__main__":
         "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/Cobblemon-fabric-1.5.2+1.20.1.jar"
     )
     p4 = Path(
-        "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/Dracomon_0.6.10.zip"
+        "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/Cobble-Remodels_v5.1.zip"
     )
 
     p5 = Path(
         "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/z_AllTheMons-Release4-Version55.zip"
     )
 
-    # p = Pack(folder_location=working_dir)
-    p = Pack(zip_location=p5)
+    p6 = Path(
+        "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/pokeinsanoV1.7.zip"
+    )
+
+    p7 = Path(
+        "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/MegamonsFabric-1.2.1.jar"
+    )
+
+    p = Pack(folder_location=working_dir)
+    # p = Pack(zip_location=p4)
 
     p._run()
     from pprint import pprint
