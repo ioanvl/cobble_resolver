@@ -57,6 +57,25 @@ class SpawnEntry:
 @dataclass
 class ResolverEntry(bcfo):
     order: int
+    textures: list[Path] = field(default_factory=list)
+    models: list[Path] = field(default_factory=list)
+    posers: list[Path] = field(default_factory=list)
+    animations: list[Path] = field(default_factory=list)
+
+    has_shiny: bool = False
+
+    requested_animations: list[str] = field(default_factory=list)
+    present_animations: list[str] = field(default_factory=list)
+
+    def __repr__(self):
+        res: str = ""
+        res += f"M:{bool_square(len(self.models))} | "
+
+        res += f"P:{bool_square(len(self.posers))} "
+        res += f"A:{bool_square(len(self.animations))} | "
+
+        res += f"T:{bool_square(len(self.textures))} "
+        res += f"Ts:{bool_square(self.has_shiny)} "
 
 
 @dataclass
@@ -65,15 +84,8 @@ class PokemonForm:
 
     aspects: list[str] = field(default_factory=list)
     # looks
-    resolvers: list[ResolverEntry] = field(default_factory=list)
-    animation: bcfo | None = None
-    model: bcfo | None = None
-    poser: bcfo | None = None
+    resolver_assignments: list[int] = field(default_factory=list)
 
-    texture: str | None = None
-    texture_shiny: str | None = None
-    textures_extra: list[str] = field(default_factory=list)
-    # data
     species: bcfo | None = None
     species_additions: bcfo | None = None
 
@@ -85,31 +97,10 @@ class PokemonForm:
         if self.name != "base_form":
             ret += f"{s} {self.name}\n"
         ret += f"{s} "
-        ret += f"DATA: Spawn:{bool_square(len(self.spawn_pool))} "
-        ret += f"S:{self.__square_atr(self.species)}/{self.__square_atr(self.species_additions)}:SA "
+        ret += f"DATA: Spawn:{bool_square(len(self.spawn_pool))} | "
+        ret += f"S:{self.__square_atr(self.species)}/{self.__square_atr(self.species_additions)}:SA | "
+        ret += f"LOOKS: {bool_square(len(self.resolver_assignments))}"
 
-        if not (
-            (self.animation is None)
-            and (self.model is None)
-            and (self.poser is None)
-            and (not self.resolvers)
-            and (self.texture is None)
-            and (self.texture_shiny is None)
-            and (not self.textures_extra)
-        ):
-            ret += f"\n{s} "
-            ret += "LOOKS: "
-            ret += f"Res:{bool_square(len(self.spawn_pool))} "
-            ret == f"Anim:{self.__square_atr(self.animation)} "
-            ret += f"Mod:{self.__square_atr(self.model)} "
-            ret += f"Pos:{self.__square_atr(self.poser)} "
-            ret += f"  T:{self.__square_atr(self.texture)} "
-            ret += f"Ts:{self.__square_atr(self.texture_shiny)} "
-            ret += (
-                f"Tx:{'|' * len(self.textures_extra)}"
-                if len(self.textures_extra)
-                else ""
-            )
         ret += f"\n{s} {'-' * 10}"
         return ret
 
@@ -125,9 +116,15 @@ class Pokemon:
 
     features: list[str] = field(default_factory=list)
     forms: dict[str, PokemonForm] = field(default_factory=dict)
+    resolvers: dict[int, ResolverEntry] = field(default_factory=dict)
 
     def __repr__(self) -> str:
-        ret: str = f"#{self.dex_id} - {self.name if self.name is not None else self.internal_name}"
+        ret: str = f"#{self.dex_id} - "
+        if self.name is None:
+            ret += f"[{self.internal_name}]"
+        else:
+            ret += f"{self.name}"
+
         for f in self.forms.values():
             ret += "\n"
             ret += repr(f)
@@ -603,7 +600,10 @@ class Pack:
 
     def display(self, pagination: int | None = None) -> None:
         for i, p in enumerate(
-            sorted(self.pokemon.values(), key=lambda item: item.dex_id)
+            sorted(
+                self.pokemon.values(),
+                key=lambda item: (item.dex_id, item.internal_name),
+            )
         ):
             print(p)
             if (pagination is not None) and (not (i % pagination)) and i:
