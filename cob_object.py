@@ -67,7 +67,7 @@ class ResolverEntry:
     aspects: set[str] = field(default_factory=set)
 
     requested_animations: set[str] = field(default_factory=set)
-    present_animations: set[str] = field(default_factory=set)
+    # present_animations: set[str] = field(default_factory=set)
 
     def __repr__(self) -> str:
         res: str = ""
@@ -201,6 +201,8 @@ class Pack:
         self.pokemon: dict[str, Pokemon] = dict()
         self.features: dict[str, Feature] = dict()
         self.feature_assignments: list[FeatureAssignment] = list()
+
+        self.present_animations: dict[str, set[str]] = dict()
 
         self.is_base: bool = False
         self.is_mod: bool = False
@@ -352,7 +354,7 @@ class Pack:
                     source=data,
                 )
 
-    def _get_feature_assignments(self) -> None:  # STEP 0b #TODO
+    def _get_feature_assignments(self) -> None:  # STEP 0b #TODO?
         if (self.component_location is None) or (
             self.component_location.species_features_assignments is None
         ):
@@ -391,6 +393,7 @@ class Pack:
         self._get_data_spawn()
 
         self._get_looks_resolvers()
+        self._get_looks_animations()
 
     # ------------------------------------------------------------
 
@@ -663,14 +666,15 @@ class Pack:
 
                 new_resolver_entry = ResolverEntry(order=order)
                 aspects: list[str] = list()
-
+                # ----- parsing through variations
                 for v in data.get("variations", list()):
-                    new_resolver_entry = self._resolver_variation_or_layer(
+                    new_resolver_entry = self._resolve_variation_or_layer(
                         entry=v, existing_resolver=new_resolver_entry
                     )
                     v_aspects = v.get("aspects", list())
                     aspects.extend(v_aspects)
 
+                # ----- assignemt to correct subforms
                 aspects = list(set(aspects))
 
                 if "shiny" in aspects:
@@ -687,6 +691,7 @@ class Pack:
                     self.pokemon[pok_name].forms["base_form"].resolver_assignments.add(
                         order
                     )
+
                 self.pokemon[pok_name].resolvers[order] = new_resolver_entry
 
                 # ---------------
@@ -695,7 +700,7 @@ class Pack:
                 print(f"\n\n{t}\n\n")
                 raise e
 
-    def _resolver_variation_or_layer(
+    def _resolve_variation_or_layer(
         self, entry: dict, existing_resolver: ResolverEntry
     ) -> ResolverEntry:
         if x := entry.get("poser", ""):
@@ -729,28 +734,83 @@ class Pack:
                     del self.component_location.models_dict[model_name]
 
         if x := entry.get("texture", ""):
-            parts: list[str] = str(x).split("/")
-            if "pokemon" in parts:
-                index = parts.index("pokemon")
-                partial_path = "/".join(parts[index + 1 :])
+            t_entries = list()
+            if isinstance(x, dict):
+                t_entries.extend(x.get("frames", list()))
+            else:
+                t_entries.append(x)
 
-                if (epath := self.component_location.textures / partial_path).exists():
-                    existing_resolver.textures.add(epath)
-                    if epath.stem in self.component_location.textures_dict:
-                        del self.component_location.textures_dict[epath.stem]
-                else:
-                    if parts[-1] in self.component_location.textures_dict:
-                        existing_resolver.textures.add(
-                            self.component_location.textures_dict[parts[-1]]
-                        )
-                        del self.component_location.textures_dict[parts[-1]]
+            for tex_entry in t_entries:
+                parts: list[str] = str(tex_entry).split("/")
+                if "pokemon" in parts:
+                    index = parts.index("pokemon")
+                    partial_path = "/".join(parts[index + 1 :])
+
+                    if (
+                        epath := self.component_location.textures / partial_path
+                    ).exists():
+                        existing_resolver.textures.add(epath)
+                        if epath.stem in self.component_location.textures_dict:
+                            del self.component_location.textures_dict[epath.stem]
+                    else:
+                        if parts[-1] in self.component_location.textures_dict:
+                            existing_resolver.textures.add(
+                                self.component_location.textures_dict[parts[-1]]
+                            )
+                            del self.component_location.textures_dict[parts[-1]]
 
         for layer in entry.get("layers", list()):
-            existing_resolver = self._resolver_variation_or_layer(
+            existing_resolver = self._resolve_variation_or_layer(
                 entry=layer, existing_resolver=existing_resolver
             )
 
         return existing_resolver
+
+    def _resolve_requested_animations(self) -> None:  # TODO
+        pass
+
+    def _get_looks_animations(self) -> None:  # STEP 2b #TODO
+        if (self.component_location is None) or (
+            self.component_location.animations is None
+        ):
+            print("-- No Animations")
+            return
+        print("-- Parsing Animations")
+
+        for t in self.component_location.animations.rglob("*.json"):
+            try:
+                try:
+                    with t.open() as f:
+                        data = json.load(f)
+                except (UnicodeDecodeError, JSONDecodeError) as _:
+                    if DEBUG:
+                        print(f"WARN!! - {t}")
+                        _ = input()
+                    continue
+
+                # ---------------
+                anims = data.get("animations", dict())
+                if not isinstance(anims, dict):
+                    continue
+
+                for key in anims.keys():
+                    key_parts: list[str] = str(key).split(".")
+                    if len(key_parts) == 1:
+                        if "__null__" not in self.present_animations:
+                            self.present_animations["__null__"] = set()
+                        self.present_animations["__null__"].add(key_parts[0])
+                    else:
+                        name = key_parts[1]
+                        move = key_parts[2]
+                        if name not in self.present_animations:
+                            self.present_animations[name] = set()
+                        self.present_animations[name].add(move)
+
+                # ---------------
+
+            except Exception as e:
+                print(f"\n\n{t}\n\n")
+                raise e
 
     # ============================================================
 
@@ -809,7 +869,7 @@ if __name__ == "__main__":
     p._run()
     from pprint import pprint
 
-    p.display(10)
+    p.display()
 
     print(len(p.pokemon.values()))
     # print(p.pokemon["tauros"])
