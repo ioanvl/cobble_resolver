@@ -6,7 +6,6 @@ from typing import Any, LiteralString
 import json
 from json import JSONDecodeError
 import zipfile
-import os
 
 DEBUG = False
 
@@ -102,7 +101,8 @@ class PokemonForm:
             ret += f"{s} {self.name}\n"
         ret += f"{s} "
         ret += f"DATA: Spawn:{bool_square(len(self.spawn_pool))} | "
-        ret += f"S:{self.__square_atr(self.species)}/{self.__square_atr(self.species_additions)}:SA "
+        ret += f"S:{self.__square_atr(self.species)}"
+        ret += f"/{self.__square_atr(self.species_additions)}:SA "
         # ret += f"| LOOKS: {bool_square(len(self.resolver_assignments))}"
 
         ret += f"\n{s} {'-' * 10}"
@@ -135,12 +135,14 @@ class Pokemon:
         for f in self.forms.values():
             ret += "\n"
             pok_f: str = repr(f)
-            if len(f.resolver_assignments):
+            if al := len(f.resolver_assignments):
                 p_parts = pok_f.split("\n")
                 p_parts.append(p_parts[-1])
                 p_parts[-2] = (
                     f"{f._st()} {repr(self.resolvers[list(f.resolver_assignments)[0]])}"
                 )
+                if al > 1:
+                    p_parts[-2] = p_parts[-2] + f"  +{al-1}"
                 pok_f = "\n".join(p_parts)
             ret += pok_f
         return ret
@@ -202,7 +204,7 @@ class Pack:
         self.features: dict[str, Feature] = dict()
         self.feature_assignments: list[FeatureAssignment] = list()
 
-        self.present_animations: dict[str, set[str]] = dict()
+        self.present_animations: dict[str, dict[str, set[str]]] = dict()
 
         self.is_base: bool = False
         self.is_mod: bool = False
@@ -225,9 +227,10 @@ class Pack:
             else self.folder_location.name
         )
 
-        print(
-            f"{self.name}  -  Mod:{bool_square(self.is_mod)} BASE:{bool_square(self.is_base)}\n {repr(self.component_location)}"
-        )
+        outp = f"{self.name}  -  Mod:{bool_square(self.is_mod)} "
+        outp += f"BASE:{bool_square(self.is_base)}\n "
+        outp += f"{repr(self.component_location)}"
+        print(outp)
 
     # ------------------------------------------------------------
 
@@ -769,7 +772,7 @@ class Pack:
     def _resolve_requested_animations(self) -> None:  # TODO
         pass
 
-    def _get_looks_animations(self) -> None:  # STEP 2b #TODO
+    def _get_looks_animations(self) -> None:  # STEP 2b
         if (self.component_location is None) or (
             self.component_location.animations is None
         ):
@@ -796,15 +799,18 @@ class Pack:
                 for key in anims.keys():
                     key_parts: list[str] = str(key).split(".")
                     if len(key_parts) == 1:
-                        if "__null__" not in self.present_animations:
-                            self.present_animations["__null__"] = set()
-                        self.present_animations["__null__"].add(key_parts[0])
+                        # no animation group, e.g. pikachu's "education"
+                        name = "__null__"
+                        move = key_parts[0]
                     else:
                         name = key_parts[1]
                         move = key_parts[2]
-                        if name not in self.present_animations:
-                            self.present_animations[name] = set()
-                        self.present_animations[name].add(move)
+
+                    if name not in self.present_animations:
+                        self.present_animations[name] = dict()
+                    if move not in self.present_animations[name]:
+                        self.present_animations[name][move] = set()
+                    self.present_animations[name][move].add(t)
 
                 # ---------------
 
@@ -864,12 +870,14 @@ if __name__ == "__main__":
     )
 
     p = Pack(folder_location=working_dir)
-    # p = Pack(zip_location=p4)
+    # p = Pack(zip_location=p6)
 
     p._run()
     from pprint import pprint
 
     p.display()
+
+    # print(p.pokemon["eiscue"].forms["base_form"].resolver_assignments)
 
     print(len(p.pokemon.values()))
     # print(p.pokemon["tauros"])
