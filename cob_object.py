@@ -2,10 +2,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from tkinter import filedialog
-from typing import Any, LiteralString
+from typing import Any, LiteralString, Optional
 import json
 from json import JSONDecodeError
 import zipfile
+from cli_utils import keypress, positive_int_choice
 
 DEBUG = False
 
@@ -75,11 +76,12 @@ class SpawnEntry:
 @dataclass
 class ResolverEntry:
     order: int
-    textures: set[Path] = field(default_factory=set)
     models: set[Path] = field(default_factory=set)
+
     posers: set[Path] = field(default_factory=set)
     animations: set[Path] = field(default_factory=set)
 
+    textures: set[Path] = field(default_factory=set)
     has_shiny: bool = False
 
     aspects: set[str] = field(default_factory=set)
@@ -99,6 +101,18 @@ class ResolverEntry:
 
         return res
 
+    @property
+    def comp_stamp(self) -> list[bool]:
+        res = list()
+        res.append(bool(len(self.models)))
+
+        res.append(bool(len(self.posers)))
+        res.append(bool(len(self.animations)))
+
+        res.append(bool(len(self.textures)))
+        res.append(self.has_shiny)
+        return res
+
 
 @dataclass
 class PokemonForm:
@@ -113,6 +127,9 @@ class PokemonForm:
 
     spawn_pool: list[Path] = field(default_factory=list)
 
+    parent_pokemon: Optional["Pokemon"] = None
+    parent_pack: Optional["Pack"] = None
+
     def __repr__(self) -> str:
         s: str = self._st()
         ret: str = ""
@@ -126,6 +143,28 @@ class PokemonForm:
 
         ret += f"\n{s} {'-' * 10}"
         return ret
+
+    @property
+    def comp_stamp(self) -> list[bool]:
+        res = list()
+        res.append(bool(len(self.spawn_pool)))
+        res.append(self.species is not None)
+        res.append(self.species_additions is not None)
+        x = bool(len(self.resolver_assignments))
+        res.append(x)
+        if x:
+            r = list(self._get_resolvers().values())[0].comp_stamp
+            res.extend(r)
+
+        else:
+            res.extend([0, 0, 0, 0, 0])
+
+        return res
+
+    def _get_resolvers(self) -> dict[int, ResolverEntry]:
+        if self.parent_pack is None:
+            return {}
+        return {r: self.parent_pokemon.resolvers[r] for r in self.resolver_assignments}
 
     def _st(self) -> LiteralString:
         return f"{' '*(3 if (self.name != 'base_form') else 0)}|"
@@ -143,6 +182,9 @@ class Pokemon:
     features: list[str] = field(default_factory=list)
     forms: dict[str, PokemonForm] = field(default_factory=dict)
     resolvers: dict[int, ResolverEntry] = field(default_factory=dict)
+
+    parent_pack: Optional["Pack"] = None
+    selected: bool = False
 
     def __repr__(self) -> str:
         ret: str = f"#{self.dex_id} - "
@@ -203,6 +245,21 @@ class PackLocations:
         res += f"A:{bool_square(self.animations)} "
         return res
 
+    def __bool__(self) -> bool:
+        return (
+            (self.resolvers is not None)
+            or (self.models is not None)
+            or (self.textures is not None)
+            or (self.animations is not None)
+            or (self.posers is not None)
+            or (self.lang is not None)
+            or (self.species is not None)
+            or (self.species_additions is not None)
+            or (self.spawn_pool_world is not None)
+            or (self.species_features is not None)
+            or (self.species_features_assignments is not None)
+        )
+
 
 class Pack:
     def __init__(
@@ -226,7 +283,6 @@ class Pack:
         self.defined_animation_types: set[str] = set()
         self.present_animations: dict[str, dict[str, set[Path]]] = dict()
         self.accessed_animations: set[str] = set()
-        # {pokemon_name: {move_animation: Path}}
 
         self.is_base: bool = False
         self.is_mod: bool = False
@@ -355,6 +411,8 @@ class Pack:
         print(f"Running pack: {self.name}")
         self._get_features()
         self._get_pokemon()
+
+        self._stamp_forms()
 
     # ------------------------------------------------------------
 
@@ -1042,6 +1100,16 @@ class Pack:
             pokemon.resolvers[resolver_entry].animations.update(a_entry)
         self.accessed_animations.add(pa_name)
 
+    # ------------------------------------------------------------
+
+    def _stamp_forms(self) -> None:
+        for p in self.pokemon.values():
+            p.parent_pack = self
+
+            for f in p.forms.values():
+                f.parent_pack = self
+                f.parent_pokemon = p
+
     # ============================================================
 
     def display(self, pagination: int | None = None) -> None:
@@ -1072,12 +1140,16 @@ class Combiner:
         self.pack_paths: set[Path] = set()
         self.packs: list[Pack] = list()
 
-    def process(self) -> None:
+        self.defined_pokemon: set[str] = set()
+
+    def run(self) -> None:
         self._gather_packs()
         self._prepare()
-        self._run()
+        self._process()
 
-    def _gather_packs(self):
+    # ------------------------------------------------------------
+
+    def _gather_packs(self) -> None:
         accepted_formats = [".zip", ".jar"]
         for f_path in self.dir_name.iterdir():
             if (
@@ -1091,30 +1163,123 @@ class Combiner:
                     )
                 )
 
+    # ------------------------------------------------------------
+
     def _prepare(self) -> None:
+        print(f"\n#{'='*25}\n#  PREPARING\n#{'='*25}\n")
         self.extraction_path = self.dir_name / ".temp"
         self.extraction_path.mkdir(parents=True, exist_ok=True)
         for p in self.packs:
             p._extraction_path = self.extraction_path
 
-    def _run(self) -> None:
         for p in self.packs:
-            p._run()
+            p._prepare()
+
+        self._remove_empty_packs()
+
+        if len(["_" for p in self.packs if p.is_base]) > 1:
+            raise RuntimeError("Multiple [BASE] type packs present.")
+
+    def _remove_empty_packs(self) -> None:
+        for p in self.packs:
+            if not bool(p.component_location):
+                self.packs.remove(p)
+
+    # ------------------------------------------------------------
+
+    def _process(self) -> None:
+        print(f"\n#{'='*25}\n#  PROCESSING\n#{'='*25}\n")
+        for p in self.packs:
+            p._process()
+
+        for p in self.packs:
+            self.defined_pokemon.update(list(p.pokemon.keys()))
+
+        self._resolution_core()
+
+    def _resolution_core(self) -> None:
+        print(f"\n#{'='*25}\n#  RESOLVE\n#{'='*25}\n")
+        for pok_name in self.defined_pokemon:
+            entities: list[Pokemon] = list()
+            for pack in self.packs:
+                if pok_name in pack.pokemon.keys():
+                    entities.append(pack.pokemon[pok_name].parent_pack.name)
+            if len(entities) > 1:
+                self._resolution_pokemon(pokemon_name=pok_name)
+
+    def _resolution_pokemon(self, pokemon_name: str) -> None:
+        temp_holder: dict[str, Pokemon] = dict()
+
+        d_num: int = 0
+        d_name: str = ""
+
+        for pack in self.packs:
+            if pokemon_name in pack.pokemon.keys():
+                temp_holder[pack.name] = pack.pokemon[pokemon_name]
+                if (
+                    (temp_holder[pack.name].dex_id != -1)
+                    and (not d_num)
+                    and (not d_name)
+                ):
+                    d_num = temp_holder[pack.name].dex_id
+                    d_name = temp_holder[pack.name].name
+        if not d_name:
+            d_name = (
+                list(temp_holder.values())[0].name
+                or f"[{list(temp_holder.values())[0].internal_name}]"
+            )
+            # print(f"={pack.name}")
+            # print(repr(pack.pokemon[pokemon_name]))
+        flag = False
+        selected_key: str = ""
+        if len(temp_holder) == 2 and ("BASE" in temp_holder):
+            keys = list(temp_holder.keys())
+            keys.remove("BASE")
+
+            b_patch = temp_holder["BASE"].forms["base_form"].comp_stamp
+            o_patch = temp_holder[keys[0]].forms["base_form"].comp_stamp
+
+            if ((not b_patch[0]) and o_patch[0]) and (
+                ((not b_patch[3]) and o_patch[3])
+                or ((not all(b_patch[4:])) and (all(o_patch[4:])))
+            ):
+                selected_key = keys[0]
+                temp_holder[selected_key].selected = True
+                flag = True
+
+        if flag:
+            print(f"--AUTO-- \n#{d_num} - {d_name}  [{selected_key}]")
+        else:
+            print(f"#{d_num} - {d_name}")
+
+            keys = list(temp_holder.keys())
+
+            for i, k in enumerate(keys):
+                pack_name = k
+                p = temp_holder[pack_name]
+                outp = repr(p)
+                out_parts = outp.split("\n")
+                out_parts[0] = f"{i}. {pack_name}"
+                outp = "\n".join(out_parts)
+                print(outp)
+
+            k_in = positive_int_choice(max_ch=len(keys), text="Pack choice: ")
+
+            selected_key = keys[k_in]
+            temp_holder[selected_key].selected = True
+            print(f"\033[A\r{' '*40}\r", end="")
+            print(f"- {k_in}. [{selected_key}]")
+
+        print("=" * 25)
+
+    # ------------------------------------------------------------
 
     def _cleanup(self) -> None:
         pass
 
 
-class Menu:
-    def __init__(self):
-        working_dir: str = ""
-
-    def __start(self):
-        dir_name = filedialog.askdirectory()
-
-
-RUN_TYPE = 0
-SELECTED_PACK = 8
+RUN_TYPE = 1
+SELECTED_PACK = [1, 3, 7]
 
 if __name__ == "__main__":
     if RUN_TYPE == 0:
@@ -1132,23 +1297,23 @@ if __name__ == "__main__":
             "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/cobblemon-main"
         )
 
-        # p = Pack(folder_location=working_dir)
-        p = Pack(zip_location=Path(packs[((SELECTED_PACK - 1) % len(packs))]))
+        if isinstance(SELECTED_PACK, int):
+            SELECTED_PACK = [SELECTED_PACK]
+        for sp in SELECTED_PACK:
+            p = Pack(zip_location=Path(packs[((sp - 1) % len(packs))]))
+            p._run()
+            from pprint import pprint
 
-        p._run()
-        from pprint import pprint
+            p.display(20)
+            pprint(list(p.features.values()))
 
-        p.display(20)
-
-        # print(p.pokemon["eiscue"].forms["base_form"].resolver_assignments)
-
-        # print(p.pokemon["tauros"])
-        # print(p.pokemon["vikavolt"].forms[0])
-        pprint(list(p.features.values()))
         # pprint(p.feature_assignments)
     elif RUN_TYPE == 1:
         hot_dir = Path(
             "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_hot_test"
         )
         comb = Combiner(dir_name=hot_dir)
-        comb.process()
+        comb.run()
+    elif RUN_TYPE == 2:
+        comb = Combiner()
+        comb.run()

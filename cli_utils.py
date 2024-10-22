@@ -19,7 +19,13 @@ nix_extras = {
 nix_extras_2 = {"[2": "ins", "[3": "del", "[5": "pg_up", "[6": "pd_down"}
 
 
-def keypress():
+def keypress(text: str | None = None):
+    if text:
+        print(text)
+    return _keypress()
+
+
+def _keypress():
     try:
         from msvcrt import getch  # try to import Windows version
     except ImportError:
@@ -113,3 +119,32 @@ def yn_q(default=None):
                 return True
             elif default == "n":
                 return False
+
+
+def positive_int_choice(max_ch: int = 9, text: str | None = None) -> int:
+    k_in = -1
+    prev_entry = ""
+    while True:
+        try:
+            if prev_entry:
+                print(f"Invalid entry: [{k_in}]")
+            k_in = keypress(text)
+            if k_in == "e":
+                exit()
+            k_in = int(k_in)
+        except Exception as _:
+            print(f"\033[A\r{' '*40}\r", end="")
+            if prev_entry:
+                print(f"\033[A\r{' '*40}\r", end="")
+            prev_entry = k_in
+            continue
+        if (0 <= k_in) and (k_in < max_ch):
+            if prev_entry:
+                print(f"\033[A\r{' '*40}\r", end="")
+            break
+        print(f"\033[A\r{' '*40}\r", end="")
+        if prev_entry:
+            print(f"\033[A\r{' '*40}\r", end="")
+        prev_entry = k_in
+
+    return k_in
