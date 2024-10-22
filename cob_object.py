@@ -12,6 +12,25 @@ DEBUG = False
 square_f = "\u25a3"
 square_e = "\u25a1"
 
+default_animation_types: list[str] = [
+    "ground_idle",
+    "ground_walk",
+    "ground_run" "air_idle",
+    "air_fly",
+    "water_idle",
+    "water_swim",
+    "render",
+    "cry",
+    "faint",
+    "recoil",
+    "blink",
+    "sleep",
+    "water_sleep",
+    "physical",
+    "special",
+    "status",
+]
+
 
 def bool_square(inp: bool = False) -> str:
     return square_f if inp else square_e
@@ -65,7 +84,7 @@ class ResolverEntry:
 
     aspects: set[str] = field(default_factory=set)
 
-    requested_animations: set[str] = field(default_factory=set)
+    requested_animations: dict[str, dict[str, bool]] = field(default_factory=dict)
     # present_animations: set[str] = field(default_factory=set)
 
     def __repr__(self) -> str:
@@ -204,7 +223,10 @@ class Pack:
         self.features: dict[str, Feature] = dict()
         self.feature_assignments: list[FeatureAssignment] = list()
 
-        self.present_animations: dict[str, dict[str, set[str]]] = dict()
+        self.defined_animation_types: set[str] = set()
+        self.present_animations: dict[str, dict[str, set[Path]]] = dict()
+        self.accessed_animations: set[str] = set()
+        # {pokemon_name: {move_animation: Path}}
 
         self.is_base: bool = False
         self.is_mod: bool = False
@@ -388,6 +410,11 @@ class Pack:
     # ------------------------------------------------------------
 
     def _get_pokemon(self) -> None:
+        self._get_data()
+
+        self._get_looks()
+
+    def _get_data(self) -> None:
         self._get_data_species()
         self._get_data_species_additions()
 
@@ -395,8 +422,15 @@ class Pack:
 
         self._get_data_spawn()
 
+    def _get_looks(self) -> None:
         self._get_looks_resolvers()
+
         self._get_looks_animations()
+        self._update_defined_animation_types()
+        self._assign_requested_animations()
+
+        self._resolve_requested_animations()
+        self._resolve_un_requested_animations()
 
     # ------------------------------------------------------------
 
@@ -630,14 +664,17 @@ class Pack:
             return
         print("-- Parsing Resolver Data")
 
-        for t in self.component_location.posers.rglob("*.json"):
-            self.component_location.posers_dict[t.stem] = t
+        if self.component_location.posers:
+            for t in self.component_location.posers.rglob("*.json"):
+                self.component_location.posers_dict[t.stem] = t
 
-        for t in self.component_location.models.rglob("*.json"):
-            self.component_location.models_dict[t.stem] = t
+        if self.component_location.models:
+            for t in self.component_location.models.rglob("*.json"):
+                self.component_location.models_dict[t.stem] = t
 
-        for t in self.component_location.textures.rglob("*.png"):
-            self.component_location.textures_dict[t.stem] = t
+        if self.component_location.textures:
+            for t in self.component_location.textures.rglob("*.png"):
+                self.component_location.textures_dict[t.stem] = t
 
         for t in self.component_location.resolvers.rglob("*.json"):
             try:
@@ -708,18 +745,19 @@ class Pack:
     ) -> ResolverEntry:
         if x := entry.get("poser", ""):
             poser_name: str = str(x).split(":")[-1]
-            if (
-                epath := self.component_location.posers / f"{poser_name}.json"
-            ).exists():
-                existing_resolver.posers.add(epath)
-                if poser_name in self.component_location.posers_dict:
-                    del self.component_location.posers_dict[poser_name]
-            else:
-                if poser_name in self.component_location.posers_dict:
-                    existing_resolver.posers.add(
-                        self.component_location.posers_dict[poser_name]
-                    )
-                    del self.component_location.posers_dict[poser_name]
+            if self.component_location.posers:
+                if (
+                    epath := self.component_location.posers / f"{poser_name}.json"
+                ).exists():
+                    existing_resolver.posers.add(epath)
+                    if poser_name in self.component_location.posers_dict:
+                        del self.component_location.posers_dict[poser_name]
+                else:
+                    if poser_name in self.component_location.posers_dict:
+                        existing_resolver.posers.add(
+                            self.component_location.posers_dict[poser_name]
+                        )
+                        del self.component_location.posers_dict[poser_name]
 
         if x := entry.get("model", ""):
             model_name: str = str(x).split(":")[-1]
@@ -769,10 +807,9 @@ class Pack:
 
         return existing_resolver
 
-    def _resolve_requested_animations(self) -> None:  # TODO
-        pass
+    # ------------------------------------------------------------
 
-    def _get_looks_animations(self) -> None:  # STEP 2b
+    def _get_looks_animations(self) -> None:  # STEP 3
         if (self.component_location is None) or (
             self.component_location.animations is None
         ):
@@ -818,6 +855,190 @@ class Pack:
                 print(f"\n\n{t}\n\n")
                 raise e
 
+    def _update_defined_animation_types(self) -> None:  # STEP 3b
+        self.defined_animation_types.update(default_animation_types)
+
+        for p_entry in self.present_animations.values():
+            self.defined_animation_types.update(list(p_entry.keys()))
+
+    # ------------------------------
+
+    def _assign_requested_animations(self) -> None:  # STEP 3c
+        for pok in self.pokemon.values():
+            for res in pok.resolvers.values():
+                requested: set[tuple[str, str]] = set()
+                for pose in list(res.posers):
+                    try:
+                        with pose.open() as f:
+                            data = json.load(f)
+                    except (UnicodeDecodeError, JSONDecodeError) as _:
+                        if DEBUG:
+                            print(f"WARN!! - {pose}")
+                            _ = input()
+                        continue
+
+                    for def_anim in self.defined_animation_types:
+                        if def_anim in data:
+                            requested.add(
+                                self._parse_poser_animation_line(
+                                    poser_line=data[def_anim]
+                                )
+                            )
+                    if "animations" in data:
+                        requested.update(
+                            self._parse_poser_animation_entry(data["animations"])
+                        )
+
+                    for _, pose_data in (data.get("poses", dict())).items():
+                        requested.update(
+                            self._navigate_poser_entry(poser_entry=pose_data)
+                        )
+
+                for req_entry in list(requested):
+                    p_name, anim_name = req_entry
+                    if p_name not in res.requested_animations:
+                        res.requested_animations[p_name] = dict()
+                    if anim_name not in res.requested_animations[p_name]:
+                        res.requested_animations[p_name][anim_name] = False
+
+    def _navigate_poser_entry(
+        self, poser_entry: dict, existing_set: set[tuple[str, str]] | None = None
+    ) -> set[tuple[str, str]]:
+        if existing_set is None:
+            existing_set: set[tuple[str, str]] = set()
+
+        for t in ["quirks", "animations"]:
+            existing_set.update(
+                self._parse_poser_animation_entry(poser_entry.get(t, None))
+            )
+
+        return existing_set
+
+    def _parse_poser_animation_entry(
+        self, poser_entry: Any, existing_set: set[tuple[str, str]] | None = None
+    ) -> set[tuple[str, str]]:
+        if existing_set is None:
+            existing_set: set[tuple[str, str]] = set()
+
+        if isinstance(poser_entry, str):
+            existing_set.add(self._parse_poser_animation_line(poser_line=poser_entry))
+        elif isinstance(poser_entry, list):
+            existing_set.update(
+                self._parse_poser_animation_list(poser_entry=poser_entry)
+            )
+        elif isinstance(poser_entry, dict):
+            existing_set.update(
+                self._parse_poser_animation_dict(poser_entry=poser_entry)
+            )
+
+        return existing_set
+
+    def _parse_poser_animation_list(
+        self, poser_entry: list, existing_set: set[tuple[str, str]] | None = None
+    ) -> set[tuple[str, str]]:
+        if existing_set is None:
+            existing_set: set[tuple[str, str]] = set()
+
+        for pl in poser_entry:
+            existing_set.update(self._parse_poser_animation_entry(pl))
+
+        return existing_set
+
+    def _parse_poser_animation_dict(
+        self, poser_entry: dict, existing_set: set[tuple[str, str]] | None = None
+    ) -> set[tuple[str, str]]:
+        if existing_set is None:
+            existing_set: set[tuple[str, str]] = set()
+
+        if "animations" in poser_entry:
+            existing_set.update(
+                self._parse_poser_animation_entry(poser_entry=poser_entry["animations"])
+            )
+            del poser_entry["animations"]
+
+        for move, pl in poser_entry.items():
+            existing_set.update(self._parse_poser_animation_entry(pl))
+
+        return existing_set
+
+    def _parse_poser_animation_line(self, poser_line: str | None) -> tuple[str, str]:
+        if not poser_line:
+            return ("", "")
+
+        for stw in ["q.bedrock", "q.bedrock_quirk", "bedrock"]:
+            if poser_line.startswith(stw):
+                return self._extract_poser_animation_line(poser_line=poser_line)
+        return ("", "")
+
+    def _extract_poser_animation_line(self, poser_line: str) -> tuple[str, str]:
+        poser_line = self._extract_parentheses(poser_line=poser_line)
+        parts = poser_line.split(",")
+        name = parts[0].strip(" ''").strip('"')
+        move = parts[1]
+        if move.startswith("q."):
+            move = self._extract_parentheses(move)
+        move = move.strip(" ''").strip('"')
+        return (name, move)
+        "" "faint" ""
+
+    def _extract_parentheses(self, poser_line: str) -> str:
+        parts = poser_line.split("(")
+        poser_line = "(".join(parts[1:]) if len(parts) > 2 else parts[1]
+        parts = poser_line.split(")")
+        poser_line = ")".join(parts[:-1]) if len(parts) > 2 else parts[0]
+        return poser_line
+
+    # ------------------------------
+
+    def _resolve_requested_animations(self) -> None:  # STEP 3d
+        for pok in self.pokemon.values():
+            for resolver in pok.resolvers.values():
+                for pn in resolver.requested_animations.keys():
+                    rn_res = self.present_animations.get(pn, dict())
+                    for req_anim in resolver.requested_animations[pn].keys():
+                        if req_anim in rn_res:
+                            resolver.animations.update(rn_res[req_anim])
+                            self.accessed_animations.add(pn)  # mark pokemon
+                            resolver.requested_animations[pn][req_anim] = True
+
+    def _resolve_un_requested_animations(self) -> None:  # STEP 3e
+        un_requested: set[str] = set(list(self.present_animations.keys())).difference(
+            self.accessed_animations
+        )
+
+        for pok in un_requested:
+            parts = pok.split("_")
+            pok_name = parts[0]
+            pok_aspect = parts[0] if len(parts) > 1 else None
+
+            if pok_name in self.pokemon:
+                pok_entity: Pokemon = self.pokemon[pok_name]
+                if not pok_aspect:
+                    self._present_animation_update_resolver(
+                        pokemon=pok_entity, resolver_entry=0, pa_name=pok
+                    )
+                else:
+                    flag = False
+                    for key, resolver in pok_entity.resolvers.items():
+                        if pok_aspect in resolver.aspects:
+                            self._present_animation_update_resolver(
+                                pokemon=pok_entity, resolver_entry=key, pa_name=pok
+                            )
+                            flag = True
+                    if not flag:
+                        self._present_animation_update_resolver(
+                            pokemon=pok_entity, resolver_entry=0, pa_name=pok
+                        )
+
+    def _present_animation_update_resolver(
+        self, pokemon: Pokemon, resolver_entry: int, pa_name: str
+    ) -> None:
+        if resolver_entry not in pokemon.resolvers:
+            pokemon.resolvers[resolver_entry] = ResolverEntry(order=resolver_entry)
+        for a_entry in self.present_animations[pa_name].values():
+            pokemon.resolvers[resolver_entry].animations.update(a_entry)
+        self.accessed_animations.add(pa_name)
+
     # ============================================================
 
     def display(self, pagination: int | None = None) -> None:
@@ -828,9 +1049,57 @@ class Pack:
             )
         ):
             print(p)
-            if (pagination is not None) and (not (i % pagination)) and i:
+            if (pagination) and (not (i % pagination)) and i:
                 _ = input("Press any key to continue..")
                 print(f"\033[A\r{' '*40}\r", end="")
+        print(
+            f"\nPokemon: {len(self.pokemon)}  Forms: {sum([len(p.forms) for p in self.pokemon.values()])}"
+        )
+
+
+class Combiner:
+    def __init__(self, dir_name: Path | None = None):
+        if (not dir_name) or (not dir_name.exists()):
+            self.dir_name = Path(filedialog.askdirectory())
+        else:
+            self.dir_name = dir_name
+
+        self.extraction_path: str = ""
+
+        self.pack_paths: set[Path] = set()
+        self.packs: list[Pack] = list()
+
+    def process(self) -> None:
+        self._gather_packs()
+        self._prepare()
+        self._run()
+
+    def _gather_packs(self):
+        accepted_formats = [".zip", ".jar"]
+        for f_path in self.dir_name.iterdir():
+            if (
+                f_path.is_dir() and f_path.stem != ".temp"
+            ) or f_path.suffix in accepted_formats:
+                self.pack_paths.add(f_path)
+                self.packs.append(
+                    Pack(
+                        folder_location=f_path if f_path.is_dir() else None,
+                        zip_location=None if f_path.is_dir() else f_path,
+                    )
+                )
+
+    def _prepare(self) -> None:
+        self.extraction_path = self.dir_name / ".temp"
+        self.extraction_path.mkdir(parents=True, exist_ok=True)
+        for p in self.packs:
+            p._extraction_path = self.extraction_path
+
+    def _run(self) -> None:
+        for p in self.packs:
+            p._run()
+
+    def _cleanup(self) -> None:
+        pass
 
 
 class Menu:
@@ -841,46 +1110,42 @@ class Menu:
         dir_name = filedialog.askdirectory()
 
 
+RUN_TYPE = 0
+SELECTED_PACK = 8
+
 if __name__ == "__main__":
-    working_dir = Path(
-        "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/cobblemon-main"
-    )
+    if RUN_TYPE == 0:
+        packs = [
+            "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/AlolaMons_v1.3.zip",
+            "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/Cobblemon-fabric-1.5.2+1.20.1.jar",
+            "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/Cobble-Remodels_v5.1.zip",
+            "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/z_AllTheMons-Release4-Version55.zip",
+            "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/pokeinsanoV1.7.zip",
+            "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/MegamonsFabric-1.2.1.jar",
+            "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/pokemans_v9.72.zip",
+            "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/Cardboard_Cutout_Mon_v1.3.zip",
+        ]
+        working_dir = Path(
+            "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/cobblemon-main"
+        )
 
-    p2 = Path(
-        "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/AlolaMons_v1.3.zip"
-    )
+        # p = Pack(folder_location=working_dir)
+        p = Pack(zip_location=Path(packs[((SELECTED_PACK - 1) % len(packs))]))
 
-    p3 = Path(
-        "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/Cobblemon-fabric-1.5.2+1.20.1.jar"
-    )
-    p4 = Path(
-        "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/Cobble-Remodels_v5.1.zip"
-    )
+        p._run()
+        from pprint import pprint
 
-    p5 = Path(
-        "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/z_AllTheMons-Release4-Version55.zip"
-    )
+        p.display(20)
 
-    p6 = Path(
-        "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/pokeinsanoV1.7.zip"
-    )
+        # print(p.pokemon["eiscue"].forms["base_form"].resolver_assignments)
 
-    p7 = Path(
-        "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/MegamonsFabric-1.2.1.jar"
-    )
-
-    p = Pack(folder_location=working_dir)
-    # p = Pack(zip_location=p6)
-
-    p._run()
-    from pprint import pprint
-
-    p.display()
-
-    # print(p.pokemon["eiscue"].forms["base_form"].resolver_assignments)
-
-    print(len(p.pokemon.values()))
-    # print(p.pokemon["tauros"])
-    # print(p.pokemon["vikavolt"].forms[0])
-    pprint(list(p.features.values()))
-    # pprint(p.feature_assignments)
+        # print(p.pokemon["tauros"])
+        # print(p.pokemon["vikavolt"].forms[0])
+        pprint(list(p.features.values()))
+        # pprint(p.feature_assignments)
+    elif RUN_TYPE == 1:
+        hot_dir = Path(
+            "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_hot_test"
+        )
+        comb = Combiner(dir_name=hot_dir)
+        comb.process()
