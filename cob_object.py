@@ -743,9 +743,10 @@ class Pack:
     def _resolve_variation_or_layer(
         self, entry: dict, existing_resolver: ResolverEntry
     ) -> ResolverEntry:
-        if x := entry.get("poser", ""):
-            poser_name: str = str(x).split(":")[-1]
-            if self.component_location.posers:
+        if self.component_location.posers:
+            if x := entry.get("poser", ""):
+                poser_name: str = str(x).split(":")[-1]
+
                 if (
                     epath := self.component_location.posers / f"{poser_name}.json"
                 ).exists():
@@ -759,46 +760,48 @@ class Pack:
                         )
                         del self.component_location.posers_dict[poser_name]
 
-        if x := entry.get("model", ""):
-            model_name: str = str(x).split(":")[-1]
-            if (
-                epath := self.component_location.models / f"{model_name}.json"
-            ).exists():
-                existing_resolver.models.add(epath)
-                if model_name in self.component_location.models_dict:
-                    del self.component_location.models_dict[model_name]
-            else:
-                if model_name in self.component_location.models_dict:
-                    existing_resolver.models.add(
-                        self.component_location.models_dict[model_name]
-                    )
-                    del self.component_location.models_dict[model_name]
+        if self.component_location.models:
+            if x := entry.get("model", ""):
+                model_name: str = str(x).split(":")[-1]
+                if (
+                    epath := self.component_location.models / f"{model_name}.json"
+                ).exists():
+                    existing_resolver.models.add(epath)
+                    if model_name in self.component_location.models_dict:
+                        del self.component_location.models_dict[model_name]
+                else:
+                    if model_name in self.component_location.models_dict:
+                        existing_resolver.models.add(
+                            self.component_location.models_dict[model_name]
+                        )
+                        del self.component_location.models_dict[model_name]
 
-        if x := entry.get("texture", ""):
-            t_entries = list()
-            if isinstance(x, dict):
-                t_entries.extend(x.get("frames", list()))
-            else:
-                t_entries.append(x)
+        if self.component_location.textures:
+            if x := entry.get("texture", ""):
+                t_entries = list()
+                if isinstance(x, dict):
+                    t_entries.extend(x.get("frames", list()))
+                else:
+                    t_entries.append(x)
 
-            for tex_entry in t_entries:
-                parts: list[str] = str(tex_entry).split("/")
-                if "pokemon" in parts:
-                    index = parts.index("pokemon")
-                    partial_path = "/".join(parts[index + 1 :])
+                for tex_entry in t_entries:
+                    parts: list[str] = str(tex_entry).split("/")
+                    if "pokemon" in parts:
+                        index = parts.index("pokemon")
+                        partial_path = "/".join(parts[index + 1 :])
 
-                    if (
-                        epath := self.component_location.textures / partial_path
-                    ).exists():
-                        existing_resolver.textures.add(epath)
-                        if epath.stem in self.component_location.textures_dict:
-                            del self.component_location.textures_dict[epath.stem]
-                    else:
-                        if parts[-1] in self.component_location.textures_dict:
-                            existing_resolver.textures.add(
-                                self.component_location.textures_dict[parts[-1]]
-                            )
-                            del self.component_location.textures_dict[parts[-1]]
+                        if (
+                            epath := self.component_location.textures / partial_path
+                        ).exists():
+                            existing_resolver.textures.add(epath)
+                            if epath.stem in self.component_location.textures_dict:
+                                del self.component_location.textures_dict[epath.stem]
+                        else:
+                            if parts[-1] in self.component_location.textures_dict:
+                                existing_resolver.textures.add(
+                                    self.component_location.textures_dict[parts[-1]]
+                                )
+                                del self.component_location.textures_dict[parts[-1]]
 
         for layer in entry.get("layers", list()):
             existing_resolver = self._resolve_variation_or_layer(
