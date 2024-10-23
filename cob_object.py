@@ -6,7 +6,7 @@ from typing import Any, LiteralString, Optional
 import json
 from json import JSONDecodeError
 import zipfile
-from cli_utils import keypress, positive_int_choice
+from cli_utils import positive_int_choice
 
 DEBUG = False
 
@@ -713,7 +713,7 @@ class Pack:
 
     # ------------------------------------------------------------
 
-    def _get_looks_resolvers(self) -> None:  # STEP 2 #TODO
+    def _get_looks_resolvers(self) -> None:  # STEP 2
         """STEP 2 - parse through resolvers"""
         if (self.component_location is None) or (
             self.component_location.resolvers is None
@@ -1111,6 +1111,13 @@ class Pack:
                 f.parent_pokemon = p
 
     # ============================================================
+
+    def __repr__(self) -> str:
+        res: str = str()
+        res += f"Px{len(self.pokemon)} "
+        res += f"Fx{sum([len(p.forms) for p in self.pokemon.values()])} "
+        res += f"| {self.name or self.folder_location or self.zip_location} "
+        return res
 
     def display(self, pagination: int | None = None) -> None:
         for i, p in enumerate(
