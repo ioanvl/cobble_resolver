@@ -6,6 +6,7 @@ from typing import Any, Literal, LiteralString, Optional
 import json
 from json import JSONDecodeError
 import zipfile
+import shutil
 from cli_utils import positive_int_choice
 
 DEBUG = False
@@ -77,6 +78,7 @@ class SpawnEntry:
 @dataclass
 class ResolverEntry:
     order: int
+    own_path: Path | None = None
     models: set[Path] = field(default_factory=set)
 
     posers: set[Path] = field(default_factory=set)
@@ -88,7 +90,7 @@ class ResolverEntry:
     aspects: set[str] = field(default_factory=set)
 
     requested_animations: dict[str, dict[str, bool]] = field(default_factory=dict)
-    # present_animations: set[str] = field(default_factory=set)
+    # TODO add warning for missing animations
 
     def __repr__(self) -> str:
         res: str = ""
@@ -112,6 +114,13 @@ class ResolverEntry:
 
         res.append(bool(len(self.textures)))
         res.append(self.has_shiny)
+        return res
+
+    def get_all_paths(self) -> set[Path]:
+        res: set[Path] = set()
+        res.add(self.own_path)
+        for x in [self.models, self.posers, self.animations, self.textures]:
+            res.update(x)
         return res
 
 
@@ -180,7 +189,6 @@ class EvolutionCollection:
 # TODO LANG!!
 
 # TODO multiple sources on each location
-# TODO "get_posers" type thing in the locationspack
 
 
 @dataclass
@@ -242,6 +250,16 @@ class PokemonForm:
             res.extend([False, False, False, False, False])
 
         return res
+
+    def get_all_paths(self) -> list[Path]:
+        res: set[Path] = set()
+        for x in [self.species, self.species_additions]:
+            if x:
+                res.add(x.file_path)
+        if self.parent_pokemon:
+            for i in self.resolver_assignments:
+                res.update(self.parent_pokemon.resolvers[i].get_all_paths())
+        return list(res)
 
     def is_complete(self) -> bool:
         return (
@@ -317,6 +335,9 @@ class Pokemon:
 
     sa_transfers_received: set[Path] = field(default_factory=set)
 
+    evo_to: int = 0
+    evo_from: int = 0
+
     def select(self) -> None:
         if not self.parent_pack:
             return  # means the pack hasnt been processed
@@ -341,6 +362,13 @@ class Pokemon:
                 self.parent_pack.pokemon[target].requested += 1
                 if entry.is_addition:
                     self.parent_pack.pokemon[target].request_transfered += 1
+
+    def get_all_paths(self):
+        res: set[Path] = set()
+        for form in self.forms.values():
+            res.update(form.get_all_paths())
+        res.update(self.sa_transfers_received)
+        return list(res)
 
     def __repr__(self) -> str:
         ret: str = f"#{self.dex_id} - "
@@ -367,6 +395,8 @@ class Pokemon:
 
 @dataclass
 class PackLocations:
+    home_location: Path | None = None
+
     resolvers: Path | None = None
     models: Path | None = None
     textures: Path | None = None
@@ -445,9 +475,56 @@ class Pack:
         self.is_base: bool = False
         self.is_mod: bool = False
 
-    def _run(self) -> None:
+    def run(self) -> None:
         self._prepare()
         self._process()
+
+    # ============================================================
+
+    def export(
+        self,
+        export_path: Path | None = None,
+        selected: bool = True,
+        export_mods: bool = False,
+    ):
+        outut_name: str = f"{self.name}_CoRe"
+        if not export_path:
+            export_path = self.folder_location.parent
+            output_path: Path = export_path / outut_name
+        else:
+            output_path = export_path
+
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        path_set: set[Path] = set()
+        delete_set: set[Path] = set()
+        mflag = self.is_base or self.is_mod
+        if (not mflag) or (mflag and export_mods):
+            for pok in self.pokemon.values():
+                if pok.selected or (not selected):
+                    path_set.update(pok.get_all_paths())
+                else:
+                    delete_set.update(pok.get_all_paths())
+            for fa in self.feature_assignments:
+                path_set.add(fa.file_path)
+
+        delete_set = delete_set.difference(path_set)
+        c = 0
+        for p in path_set:
+            if p:
+                np = output_path / p.relative_to(self.folder_location)
+                np.parent.mkdir(parents=True, exist_ok=True)
+
+                shutil.move(p, np)
+                c += 1
+        for p in delete_set:
+            if p:
+                p.unlink()
+        outp = f"{c} files moved "
+        if d := (len(path_set) - c):
+            outp += f"- {d} missed "
+        outp += f"| {self.name}"
+        print(outp)
 
     # ============================================================
 
@@ -513,6 +590,7 @@ class Pack:
 
     def _get_paths(self) -> None:
         val = PackLocations()
+        val.home_location = self.folder_location
         if (temp_assets := self.folder_location / "assets" / "cobblemon").exists():
             if (temp_assets_bedrock := (temp_assets / "bedrock")).exists():
                 if (temp_assets_bedrock / "pokemon").exists():
@@ -1296,6 +1374,21 @@ class Pack:
 
     # ------------------------------------------------------------
 
+    def _assign_evo_score(self):
+        for entry in self.registered_evolutions.evolutions:
+            if (x := self._cleanup_evo_name(entry.to_pokemon)) in self.pokemon:
+                self.pokemon[x].evo_to += 1
+
+            if (x := self._cleanup_evo_name(entry.from_pokemon)) in self.pokemon:
+                self.pokemon[x].evo_from += 1
+
+    def _cleanup_evo_name(self, name: str) -> str:
+        if name:
+            name = name.split(" ")[0]
+            name = name.split("_")[0]
+            return name
+        return ""
+
     def _stamp_forms(self) -> None:
         for p in self.pokemon.values():
             p.parent_pack = self
@@ -1350,6 +1443,15 @@ class Combiner:
         self._gather_packs()
         self._prepare()
         self._process()
+        self.export()
+
+    def export(self):
+        pack_path = self.dir_name / "output" / "CORE_Pack"
+        if pack_path.exists():
+            if pack_path.is_dir():
+                shutil.rmtree(pack_path)
+        for pack in self.packs:
+            pack.export(export_path=pack_path)
 
     # ------------------------------------------------------------
 
@@ -1407,6 +1509,13 @@ class Combiner:
         _to_check: set[str] = self.defined_pokemon.copy()
         _checked: set[str] = set()
 
+        _to_check = sorted(
+            _to_check,
+            key=lambda x: sum(
+                [p.pokemon[x].evo_from for p in self.packs if (x in p.pokemon)]
+            ),
+        )
+
         for p_name in _to_check:
             if sum([1 for p in self.packs if (p_name in p.pokemon)]) == 1:
                 holder, num, name = self._make_pack_holder(p_name)
@@ -1420,9 +1529,16 @@ class Combiner:
             _to_check.remove(i)
         self._greedy_step_double(remaining=_to_check)
 
-    def _greedy_step_double(self, remaining: set[str]):
+    def _greedy_step_double(self, remaining: set[str]) -> None:
         _avail_checks = [self._dual_choice]
         _to_check: set[str] = remaining.copy()
+
+        _to_check = sorted(
+            _to_check,
+            key=lambda x: sum(
+                [p.pokemon[x].evo_from for p in self.packs if (x in p.pokemon)]
+            ),
+        )
 
         while True:
             _num_flag = False
@@ -1465,9 +1581,17 @@ class Combiner:
                         p_name
                     )  # TODO IS this dangerous? editing but also breaking
                     break
+        self._greedy_step_rest()
 
-    def _greedy_step_rest(self, remaining: set[str]):
+    def _greedy_step_rest(self, remaining: set[str]) -> None:
         _to_check: set[str] = remaining.copy()
+
+        _to_check = sorted(
+            _to_check,
+            key=lambda x: sum(
+                [p.pokemon[x].evo_from for p in self.packs if (x in p.pokemon)]
+            ),
+        )
 
         for p_name in _to_check:
             holder, num, name = self._make_pack_holder(p_name)
@@ -1740,7 +1864,7 @@ if __name__ == "__main__":
             SELECTED_PACK = [SELECTED_PACK]
         for sp in SELECTED_PACK:
             p = Pack(zip_location=Path(packs[((sp - 1) % len(packs))]))
-            p._run()
+            p.run()
             from pprint import pprint
 
             p.display(20)
@@ -1756,3 +1880,12 @@ if __name__ == "__main__":
     elif RUN_TYPE == 2:
         comb = Combiner()
         comb.run()
+    elif RUN_TYPE == 3:
+        p = Pack(
+            zip_location=Path(
+                "F:/Users/Main/Desktop/mc_palette/mod_workshop/resource packs/cobble_2_0/AlolaMons_v1.3.zip",
+            )
+        )
+        p.run()
+        p.display()
+        p.export(selected=False)
