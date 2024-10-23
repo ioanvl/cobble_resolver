@@ -4,9 +4,17 @@ import sys
 special_keys = {
     "\r": "enter",
     "\t": "tab",
+    "\x08": "back",
+    "\x1b": "esc",
+    "\x03": "exit",
 }
 
-win_extras = {"H": "up", "P": "down", "M": "right", "K": "left"}
+win_extras = {
+    "H": "up",
+    "P": "down",
+    "M": "right",
+    "K": "left",
+}
 
 nix_extras = {
     "[A": "up",
@@ -129,7 +137,7 @@ def positive_int_choice(max_ch: int = 9, text: str | None = None) -> int:
             if prev_entry:
                 print(f"Invalid entry: [{k_in}]")
             k_in = keypress(text)
-            if k_in == "e":
+            if k_in in ["e", "exit"]:
                 exit()
             k_in = int(k_in)
         except Exception as _:

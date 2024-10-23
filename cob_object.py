@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from tkinter import filedialog
-from typing import Any, LiteralString, Optional
+from typing import Any, Literal, LiteralString, Optional
 import json
 from json import JSONDecodeError
 import zipfile
@@ -12,6 +12,7 @@ DEBUG = False
 
 square_f = "\u25a3"
 square_e = "\u25a1"
+check_mark = "\u2713"
 
 default_animation_types: list[str] = [
     "ground_idle",
@@ -115,6 +116,74 @@ class ResolverEntry:
 
 
 @dataclass
+class EvolutionEntry:
+    from_pokemon: str
+    to_pokemon: str
+    file_path: Path
+    is_addition: bool = False
+
+    def __eq__(self, value: "EvolutionEntry") -> bool:
+        return (
+            (self.from_pokemon == value.from_pokemon)
+            and (self.to_pokemon == value.to_pokemon)
+            and (self.file_path == value.file_path)
+            and (self.is_addition == value.is_addition)
+        )
+
+    def __hash__(self) -> int:
+        return hash(
+            (self.from_pokemon, self.to_pokemon, self.file_path, self.is_addition)
+        )
+
+
+@dataclass
+class EvolutionCollection:
+    evolutions: set[EvolutionEntry] = field(default_factory=set)
+
+    def get_evolutions(
+        self, source: str | None = None, result: str | None = None
+    ) -> list[EvolutionEntry]:
+        res: list[EvolutionEntry] = list()
+        if source:
+            res.extend(
+                [
+                    ev
+                    for ev in self.evolutions
+                    if (
+                        (ev.from_pokemon == source)
+                        or (ev.from_pokemon.startswith(f"{source}_"))
+                    )
+                ]
+            )
+        if result:
+            res.extend(
+                [
+                    ev
+                    for ev in self.evolutions
+                    if (
+                        (ev.to_pokemon == result)
+                        or (ev.to_pokemon.startswith(f"{result}_"))
+                    )
+                ]
+            )
+        return res
+
+    def add(self, ev: EvolutionEntry) -> None:
+        self.evolutions.add(ev)
+        if (ev.from_pokemon is None) or (ev.to_pokemon is None):
+            pass
+
+    def remove(self, ev: EvolutionEntry) -> None:
+        self.evolutions.remove(ev)
+
+
+# TODO LANG!!
+
+# TODO multiple sources on each location
+# TODO "get_posers" type thing in the locationspack
+
+
+@dataclass
 class PokemonForm:
     name: str
 
@@ -139,7 +208,20 @@ class PokemonForm:
         ret += f"DATA: Spawn:{bool_square(len(self.spawn_pool))} | "
         ret += f"S:{self.__square_atr(self.species)}"
         ret += f"/{self.__square_atr(self.species_additions)}:SA "
-        # ret += f"| LOOKS: {bool_square(len(self.resolver_assignments))}"
+
+        if self.name == "base_form" and (self.parent_pokemon is not None):
+            if self.parent_pokemon.sa_transfers_received:
+                ret += " +SA"
+
+            if self.parent_pokemon.requested:
+                ret += " +Req"
+                if req_diff := (
+                    self.parent_pokemon.requested
+                    - self.parent_pokemon.request_transfered
+                ):
+                    ret += f"[{req_diff}]"
+                else:
+                    ret += f"[{check_mark}]"
 
         ret += f"\n{s} {'-' * 10}"
         return ret
@@ -147,19 +229,63 @@ class PokemonForm:
     @property
     def comp_stamp(self) -> list[bool]:
         res = list()
-        res.append(bool(len(self.spawn_pool)))
-        res.append(self.species is not None)
+        res.append(self.has_spawn())
+        res.append(self.has_species_data())
         res.append(self.species_additions is not None)
         x = bool(len(self.resolver_assignments))
         res.append(x)
         if x:
-            r = list(self._get_resolvers().values())[0].comp_stamp
+            r: list[bool] = list(self._get_resolvers().values())[0].comp_stamp
             res.extend(r)
 
         else:
-            res.extend([0, 0, 0, 0, 0])
+            res.extend([False, False, False, False, False])
 
         return res
+
+    def is_complete(self) -> bool:
+        return (
+            self.has_spawn()
+            and self.has_species_data()
+            and self.is_graphically_complete()
+        )
+
+    def is_addition(self, only: bool = True) -> bool:
+        stamp = self.comp_stamp
+        flag2 = (sum(stamp) == 1) if only else (not stamp[1])
+        return stamp[2] and flag2
+
+    def is_species(self, only: bool = True) -> bool:
+        stamp = self.comp_stamp
+        flag2 = (sum(stamp) == 1) if only else (not stamp[2])
+        return stamp[1] and flag2
+
+    def is_data(self) -> bool:
+        stamp = self.comp_stamp
+        return stamp[1] and stamp[2] and (sum(stamp) == 2)
+
+    def has_spawn(self) -> bool:
+        return bool(len(self.spawn_pool))
+
+    def has_species_data(self) -> bool:
+        return self.species is not None
+
+    def has_addition_data(self) -> bool:
+        return self.species_additions is not None
+
+    def has_sp_data(self) -> bool:
+        return self.has_species_data() or self.has_addition_data()
+
+    def is_graphically_complete(self) -> bool:
+        stamp = self.comp_stamp
+        return stamp[3] and stamp[4] and stamp[6] and stamp[7] and stamp[8]
+
+    def has_graphics(self) -> bool:
+        stamp: list[bool] = self.comp_stamp
+        if stamp[3]:
+            if any(stamp[4:]):
+                return True
+        return False
 
     def _get_resolvers(self) -> dict[int, ResolverEntry]:
         if self.parent_pack is None:
@@ -185,6 +311,36 @@ class Pokemon:
 
     parent_pack: Optional["Pack"] = None
     selected: bool = False
+
+    requested: int = 0
+    request_transfered: int = 0
+
+    sa_transfers_received: set[Path] = field(default_factory=set)
+
+    def select(self) -> None:
+        if not self.parent_pack:
+            return  # means the pack hasnt been processed
+        self.selected = True
+        self._mark_requests()
+
+    def _mark_requests(self) -> None:
+        evo_requests: list[EvolutionEntry] = (
+            self.parent_pack.registered_evolutions.get_evolutions(
+                result=self.internal_name
+            )
+        )
+
+        for entry in evo_requests:
+            if entry.is_addition:
+                self.sa_transfers_received.add(entry.file_path)
+
+            target = entry.from_pokemon
+            target = target.split("_")[0]
+
+            if target in self.parent_pack.pokemon:
+                self.parent_pack.pokemon[target].requested += 1
+                if entry.is_addition:
+                    self.parent_pack.pokemon[target].request_transfered += 1
 
     def __repr__(self) -> str:
         ret: str = f"#{self.dex_id} - "
@@ -283,6 +439,8 @@ class Pack:
         self.defined_animation_types: set[str] = set()
         self.present_animations: dict[str, dict[str, set[Path]]] = dict()
         self.accessed_animations: set[str] = set()
+
+        self.registered_evolutions: EvolutionCollection = EvolutionCollection()
 
         self.is_base: bool = False
         self.is_mod: bool = False
@@ -532,11 +690,43 @@ class Pack:
                         aspects=(i_form.get("aspects", list())),
                         species=bcfo(file_path=t, source=i_form),
                     )
-
                 self.pokemon[pok.internal_name] = pok
+                self._register_evolutions(
+                    data=data, name=pok.internal_name, file_path=t
+                )
+
             except Exception as e:
                 print(f"\n\n{t}\n\n")
                 raise e
+
+    def _register_evolutions(
+        self, data: dict, name: str, file_path: Path, is_addition: bool = False
+    ) -> None:
+        for ev in data.get("evolutions", list()):
+            self.registered_evolutions.add(
+                EvolutionEntry(
+                    from_pokemon=name,
+                    to_pokemon=ev["result"],
+                    file_path=file_path,
+                    is_addition=is_addition,
+                )
+            )
+        if ("preEvolution" in data) and (data["preEvolution"]):
+            self.registered_evolutions.add(
+                EvolutionEntry(
+                    from_pokemon=data["preEvolution"],
+                    to_pokemon=name,
+                    file_path=file_path,
+                    is_addition=is_addition,
+                )
+            )
+        for form in data.get("forms", list()):
+            self._register_evolutions(
+                data=form,
+                name=f"{name}_{form['name']}",
+                file_path=file_path,
+                is_addition=is_addition,
+            )
 
     def _get_data_species_additions(self) -> None:  # STEP 1b
         if (self.component_location is None) or (
@@ -602,6 +792,10 @@ class Pack:
                         self.pokemon[target].forms[form_name].aspects.extend(
                             i_form.get("aspects", list())
                         )
+
+                self._register_evolutions(
+                    data=data, name=target, file_path=t, is_addition=True
+                )
 
                 # ---------------
 
@@ -1149,6 +1343,9 @@ class Combiner:
 
         self.defined_pokemon: set[str] = set()
 
+        self._process_mods = False
+        self._allow_risky_rules = True
+
     def run(self) -> None:
         self._gather_packs()
         self._prepare()
@@ -1181,6 +1378,7 @@ class Combiner:
 
         for p in self.packs:
             p._prepare()
+            print("")
 
         self._remove_empty_packs()
 
@@ -1202,86 +1400,320 @@ class Combiner:
         for p in self.packs:
             self.defined_pokemon.update(list(p.pokemon.keys()))
 
-        self._resolution_core()
+        # self._resolution_core()
+        self._resolution_greedy()
 
-    def _resolution_core(self) -> None:
-        print(f"\n#{'='*25}\n#  RESOLVE\n#{'='*25}\n")
-        for pok_name in self.defined_pokemon:
-            entities: list[Pokemon] = list()
-            for pack in self.packs:
-                if pok_name in pack.pokemon.keys():
-                    entities.append(pack.pokemon[pok_name].parent_pack.name)
-            if len(entities) > 1:
-                self._resolution_pokemon(pokemon_name=pok_name)
+    def _resolution_greedy(self) -> None:
+        _to_check: set[str] = self.defined_pokemon.copy()
+        _checked: set[str] = set()
 
-    def _resolution_pokemon(self, pokemon_name: str) -> None:
-        temp_holder: dict[str, Pokemon] = dict()
+        for p_name in _to_check:
+            if sum([1 for p in self.packs if (p_name in p.pokemon)]) == 1:
+                holder, num, name = self._make_pack_holder(p_name)
+                pack, sel_type = self._single_simple_add(holder=holder)
+                holder[pack].select()
+                self._print_pack_choise(
+                    number=num, name=name, selected_pack=pack, selection_type=sel_type
+                )
+                _checked.add(p_name)
+        for i in _checked:
+            _to_check.remove(i)
+        self._greedy_step_double(remaining=_to_check)
+
+    def _greedy_step_double(self, remaining: set[str]):
+        _avail_checks = [self._dual_choice]
+        _to_check: set[str] = remaining.copy()
+
+        while True:
+            _num_flag = False
+            _checked: set[str] = set()
+            for p_name in _to_check:
+                if sum([1 for p in self.packs if (p_name in p.pokemon)]) == 2:
+                    _num_flag = True
+                    holder, num, name = self._make_pack_holder(p_name)
+
+                    flag = False
+                    selected_key: str = ""
+                    selection_type: str = ""
+                    for check in _avail_checks:
+                        if not flag:
+                            selected_key, selection_type = check(holder=holder)
+                            flag: bool = selected_key is not None
+                    if flag:
+                        _checked.add(p_name)
+                        holder[selected_key].select()
+                        self._print_pack_choise(
+                            number=num,
+                            name=name,
+                            selected_pack=selected_key,
+                            selection_type=selection_type,
+                        )
+            if not _num_flag:
+                break
+            for i in _checked:
+                _to_check.remove(i)
+            _checked = set()
+
+            for p_name in _to_check:
+                if (
+                    sum([1 for p in self.packs if (p_name in p.pokemon)]) == 2
+                ):  # TODO fuckin optimize this, for the love of god
+                    holder, num, name = self._make_pack_holder(p_name)
+
+                    self._choose_pack(holder=holder, number=num, name=name)
+                    _to_check.remove(
+                        p_name
+                    )  # TODO IS this dangerous? editing but also breaking
+                    break
+
+    def _greedy_step_rest(self, remaining: set[str]):
+        _to_check: set[str] = remaining.copy()
+
+        for p_name in _to_check:
+            holder, num, name = self._make_pack_holder(p_name)
+            self._choose_pack(holder=holder, number=num, name=name)
+
+    def _make_pack_holder(
+        self, pokemon_name: str
+    ) -> tuple[dict[str, Pokemon], int, str]:
+        holder: dict[str, Pokemon] = dict()
 
         d_num: int = 0
         d_name: str = ""
 
         for pack in self.packs:
             if pokemon_name in pack.pokemon.keys():
-                temp_holder[pack.name] = pack.pokemon[pokemon_name]
-                if (
-                    (temp_holder[pack.name].dex_id != -1)
-                    and (not d_num)
-                    and (not d_name)
-                ):
-                    d_num = temp_holder[pack.name].dex_id
-                    d_name = temp_holder[pack.name].name
+                holder[pack.name] = pack.pokemon[pokemon_name]
+                if (holder[pack.name].dex_id != -1) and (not d_num) and (not d_name):
+                    d_num = holder[pack.name].dex_id
+                    d_name = holder[pack.name].name
         if not d_name:
             d_name = (
-                list(temp_holder.values())[0].name
-                or f"[{list(temp_holder.values())[0].internal_name}]"
+                list(holder.values())[0].name
+                or f"[{list(holder.values())[0].internal_name}]"
             )
-            # print(f"={pack.name}")
-            # print(repr(pack.pokemon[pokemon_name]))
+        return holder, d_num, d_name
+
+    def _resolution_core(self) -> None:
+        print(f"\n#{'='*25}\n#  RESOLVE\n#{'='*25}\n")
+        for pok_name in self.defined_pokemon:
+            self._resolution_pokemon(pokemon_name=pok_name)
+
+    def _resolution_pokemon(self, pokemon_name: str) -> None:
+        temp_holder, d_num, d_name = self._make_pack_holder(pokemon_name=pokemon_name)
+
         flag = False
         selected_key: str = ""
-        if len(temp_holder) == 2 and ("BASE" in temp_holder):
-            keys = list(temp_holder.keys())
-            keys.remove("BASE")
+        selection_type: str = ""
 
-            b_patch = temp_holder["BASE"].forms["base_form"].comp_stamp
-            o_patch = temp_holder[keys[0]].forms["base_form"].comp_stamp
-
-            if ((not b_patch[0]) and o_patch[0]) and (
-                ((not b_patch[3]) and o_patch[3])
-                or ((not all(b_patch[4:])) and (all(o_patch[4:])))
-            ):
-                selected_key = keys[0]
-                temp_holder[selected_key].selected = True
-                flag = True
+        checks = [self._single_simple_add, self._dual_choice]
+        for check in checks:
+            if not flag:
+                selected_key, selection_type = check(holder=temp_holder)
+                flag = selected_key is not None
 
         if flag:
-            print(f"--AUTO-- \n#{d_num} - {d_name}  [{selected_key}]")
+            self._print_pack_choise(
+                number=d_num,
+                name=d_name,
+                selected_pack=selected_key,
+                selection_type=selection_type,
+            )
         else:
-            print(f"#{d_num} - {d_name}")
+            self._choose_pack(holder=temp_holder, number=d_num, name=d_name)
 
-            keys = list(temp_holder.keys())
+    def _single_simple_add(
+        self, holder: dict[str, Pokemon]
+    ) -> tuple[str, Literal["A"]] | tuple[None, None]:
+        if len(holder) == 1:
+            selected_key = list(holder.keys())[0]
+            holder[selected_key].select()
+            return (selected_key, "A")
+        return (None, None)
 
-            for i, k in enumerate(keys):
-                pack_name = k
-                p = temp_holder[pack_name]
-                outp = repr(p)
-                out_parts = outp.split("\n")
-                out_parts[0] = f"{i}. {pack_name}"
-                outp = "\n".join(out_parts)
-                print(outp)
+    def _dual_choice(self, holder: dict[str, Pokemon]):
+        if len(holder) == 2:
+            if "BASE" in holder:
+                pack, stype = self._dual_choice_against_base(holder=holder)
+                if pack is not None:
+                    return (pack, stype)
 
-            k_in = positive_int_choice(max_ch=len(keys), text="Pack choice: ")
+            for _check in [
+                self._dual_choice_only_mods_ignore,
+                self._dual_choice_mod_and_pack,
+            ]:
+                pack, stype = _check(holder=holder)
+                if pack is not None:
+                    return (pack, stype)
+        return (None, None)
 
-            selected_key = keys[k_in]
-            temp_holder[selected_key].selected = True
-            print(f"\033[A\r{' '*40}\r", end="")
-            print(f"- {k_in}. [{selected_key}]")
+    def _dual_choice_against_base(self, holder: dict[str, Pokemon]):
+        keys = list(holder.keys())
+        keys.remove("BASE")
+        other_key = keys[0]
 
+        for _ckeck in [
+            self._dual_choice_against_base_add,
+            self._dual_choice_against_base_add_spawn,
+        ]:
+            pack, stype = _ckeck(holder=holder, other_key=other_key)
+            if pack is not None:
+                return (pack, stype)
+        return (None, None)
+
+    def _dual_choice_against_base_add(
+        self, holder: dict[str, Pokemon], other_key: str, mod_key: str = "BASE"
+    ) -> tuple[str, Literal["R"]] | tuple[None, None]:
+        b_patch = holder[mod_key].forms["base_form"].comp_stamp
+        o_patch = holder[other_key].forms["base_form"].comp_stamp
+
+        if ((not b_patch[0]) and o_patch[0]) and (
+            ((not b_patch[3]) and o_patch[3])
+            or ((not all(b_patch[4:])) and (all(o_patch[4:])))
+        ):
+            holder[other_key].select()
+            return (other_key, "R")
+        return (None, None)
+
+    def _dual_choice_against_base_add_spawn(
+        self, holder: dict[str, Pokemon], other_key: str, mod_key: str = "BASE"
+    ):
+        fb = holder[mod_key].forms["base_form"]
+        fo = holder[other_key].forms["base_form"]
+
+        if (
+            (not fb.has_spawn())
+            and (fb.has_graphics())
+            and fo.has_spawn()
+            and (not fo.has_graphics())
+        ):
+            holder[other_key].select()
+            return (other_key, "R")
+        return (None, None)
+
+    def _dual_choice_only_mods_ignore(
+        self, holder: dict[str, Pokemon]
+    ) -> tuple[str, Literal["I"]] | tuple[None, None]:
+        if (
+            all(
+                [
+                    (p.parent_pack.is_base or p.parent_pack.is_mod)
+                    for p in holder.values()
+                ]
+            )
+        ) and (not self._process_mods):
+            return (list(holder.keys())[0], "I")
+        return (None, None)
+
+    def _dual_choice_mod_and_pack(self, holder: dict[str, Pokemon]):
+        if (
+            sum(
+                [
+                    (p.parent_pack.is_base or p.parent_pack.is_mod)
+                    for p in holder.values()
+                ]
+            )
+            == 1
+        ):
+            fm = [
+                p
+                for p in holder.values()
+                if (p.parent_pack.is_base or p.parent_pack.is_mod)
+            ][0].forms["base_form"]
+            fo = [
+                p
+                for p in holder.values()
+                if not (p.parent_pack.is_base or p.parent_pack.is_mod)
+            ][0].forms["base_form"]
+
+            for _check in [
+                self._dual_choice_mod_and_remodel,
+                self._dual_choice_mod_and_pack_addition,
+                self._dual_choice_mod_and_species,
+                self._dual_choice_mod_w_g_and_spawn,
+            ]:
+                pack, stype = _check(pok_mod=fm, pok_other=fo)
+                if pack is not None:
+                    return (pack, stype)
+        return (None, None)
+
+    def _dual_choice_mod_and_remodel(
+        self, pok_mod: PokemonForm, pok_other: PokemonForm
+    ) -> tuple[str, Literal["G"]] | tuple[None, None]:
+        if (pok_mod.has_spawn() and pok_mod.has_species_data()) and (
+            (not pok_other.has_spawn())
+            and (not pok_other.has_species_data())
+            and pok_other.is_graphically_complete()
+        ):
+            return (pok_other.parent_pack.name, "G")
+        return (None, None)
+
+    def _dual_choice_mod_and_pack_addition(
+        self, pok_mod: PokemonForm, pok_other: PokemonForm
+    ) -> tuple[str, Literal["G2"]] | tuple[None, None]:
+        if (not pok_mod.has_graphics()) and pok_other.is_graphically_complete():
+            return (pok_other.parent_pack.name, "G2")
+        return (None, None)
+
+    def _dual_choice_mod_and_species(
+        self, pok_mod: PokemonForm, pok_other: PokemonForm
+    ) -> tuple[str, Literal["G3-R"]] | tuple[None, None]:
+        if pok_other.is_species() and self._allow_risky_rules:
+            return (pok_other.parent_pack.name, "G3-R")
+
+        return (None, None)
+
+    def _dual_choice_mod_w_g_and_spawn(
+        self, pok_mod: PokemonForm, pok_other: PokemonForm
+    ) -> tuple[str, Literal["G3-R"]] | tuple[None, None]:
+        if self._allow_risky_rules:
+            if (
+                (
+                    pok_mod.is_graphically_complete()
+                    and pok_other.is_graphically_complete()
+                )
+                and (pok_mod.has_sp_data() and (not pok_other.has_sp_data()))
+                and ((not pok_mod.has_spawn()) and pok_other.has_spawn())
+            ):
+                return (pok_other.parent_pack.name, "G4-R")
+
+        return (None, None)
+
+    def _print_pack_choise(
+        self, number: int, name: str, selected_pack: str, selection_type: str = "M"
+    ) -> None:
+        if not ((selection_type == "A") and selected_pack == "BASE"):
+            print(
+                f"-- AUTO [{selection_type}] -- \n#{number} - {name}  [{selected_pack}]"
+            )
+        if not ((selection_type == "A") and selected_pack == "BASE"):
+            print("=" * 25)
+
+    def _choose_pack(self, holder: dict[str, Pokemon], number: int, name: str):
+        print(f"#{number} - {name}")
+
+        keys = list(holder.keys())
+
+        for i, k in enumerate(keys):
+            pack_name = k
+            p = holder[pack_name]
+            outp = repr(p)
+            out_parts = outp.split("\n")
+            out_parts[0] = f"{i}. {pack_name}"
+            outp = "\n".join(out_parts)
+            print(outp)
+
+        k_in = positive_int_choice(max_ch=len(keys), text="Pack choice: ")
+
+        selected_key = keys[k_in]
+        holder[selected_key].select()
+        print(f"\033[A\r{' '*40}\r", end="")
+        print(f"- {k_in}. [{selected_key}]")
         print("=" * 25)
 
     # ------------------------------------------------------------
 
-    def _cleanup(self) -> None:
+    def _cleanup(self) -> None:  # TODO
         pass
 
 
