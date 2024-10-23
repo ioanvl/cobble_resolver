@@ -1511,7 +1511,7 @@ class Combiner:
 
         _to_check = sorted(
             _to_check,
-            key=lambda x: sum(
+            key=lambda x: max(
                 [p.pokemon[x].evo_from for p in self.packs if (x in p.pokemon)]
             ),
         )
