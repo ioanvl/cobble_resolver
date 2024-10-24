@@ -608,8 +608,8 @@ class Pack:
                     path_set.update(pok.get_all_export_paths())
                 else:
                     delete_set.update(pok.get_all_export_paths())
-            for fa in self.feature_assignments:
-                path_set.add(fa.file_path)
+            # for fa in self.feature_assignments:  #TODO....maybe?
+            #     path_set.add(fa.file_path)
 
         delete_set = delete_set.difference(path_set)
         c = 0
@@ -2088,6 +2088,8 @@ class Combiner:
                 self._dual_choice_mod_and_req_pack,
                 self._dual_choice_mod_and_req_pack_2,
                 self._dual_choice_mod_remodel,
+                self._dual_choice_card,
+                self._dual_choice_card_2,
             ]:
                 pack, stype = _check(pok_mod=fm, pok_other=fo)
                 if pack is not None:
@@ -2169,18 +2171,43 @@ class Combiner:
             return (pok_other.parent_pack.name, "G5-R")
         return (None, None)
 
+    def _dual_choice_card(
+        self, pok_mod: PokemonForm, pok_other: PokemonForm
+    ) -> tuple[str, Literal["G5-R"]] | tuple[None, None]:
+        if (
+            pok_mod.is_complete()
+            and pok_mod.parent_pack.is_base
+            and (not pok_other.has_spawn())
+            and (not pok_other.has_sp_data())
+            and (not pok_other.is_graphically_complete())
+        ):
+            return (pok_mod.parent_pack.name, "CARD")
+        return (None, None)
+
+    def _dual_choice_card_2(
+        self, pok_mod: PokemonForm, pok_other: PokemonForm
+    ) -> tuple[str, Literal["G5-R"]] | tuple[None, None]:
+        if (
+            pok_mod.parent_pack.is_base
+            and (not pok_mod.has_spawn())
+            and (not pok_mod.has_graphics())
+            and pok_other.has_graphics()
+        ):
+            return (pok_mod.parent_pack.name, "CARD2")
+        return (None, None)
+
     def _print_pack_choise(
         self, number: int, name: str, selected_pack: str, selection_type: str = "M"
     ) -> None:
         x = [p for p in self.packs if p.name == selected_pack][0]
-        if (x.is_base) or (x.is_mod and (not self._process_mods)):
+        if (x.is_base and (selection_type in ["A"])) or (
+            x.is_mod and (not self._process_mods)
+        ):
             return
-        if not ((selection_type == "A") and selected_pack == "BASE"):
-            print(
-                f"-- AUTO [{selection_type}] -- \n#{number} - {name}  [{selected_pack}]"
-            )
-        if not ((selection_type == "A") and selected_pack == "BASE"):
-            print("=" * 25)
+
+        print(f"-- AUTO [{selection_type}] -- \n#{number} - {name}  [{selected_pack}]")
+
+        print("=" * 25)
 
     def _choose_pack(self, holder: dict[str, Pokemon], number: int, name: str):
         print(f"#{number} - {name}")
