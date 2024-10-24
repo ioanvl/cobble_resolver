@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from tkinter import filedialog
-from typing import Any, Literal, LiteralString, Optional
+from typing import Any, Iterable, Literal, LiteralString, Optional
 import json
 from json import JSONDecodeError
 import zipfile
@@ -14,7 +14,7 @@ DEBUG = False
 square_f = "\u25a3"
 square_e = "\u25a1"
 check_mark = "\u2713"
-clear_line = f"\033[A\r{' '*40}\r"
+clear_line = f"\033[A\r{' '*60}\r"
 
 default_animation_types: list[str] = [
     "ground_idle",
@@ -38,6 +38,10 @@ default_animation_types: list[str] = [
 
 def bool_square(inp: bool = False) -> str:
     return square_f if inp else square_e
+
+
+def line_header(text: str = ""):
+    print(f"\n#{'='*25}\n#  {text.capitalize()}\n#{'='*25}\n")
 
 
 def clear_empty_dir(
@@ -220,8 +224,10 @@ class EvolutionCollection:
 
 
 # TODO multiple sources on each location
-# sounds
-# pokedex fix
+# TODO sounds
+# TODO pokedex fix
+
+# TODO ...merging?
 
 
 @dataclass
@@ -401,13 +407,16 @@ class Pokemon:
             if entry.is_addition:
                 self.sa_transfers_received.add(entry.file_path)
 
-            target = entry.from_pokemon
-            target = target.split("_")[0]
+            pre_evolution = entry.from_pokemon
+            pre_evolution = pre_evolution.split("_")[0]
 
-            if target in self.parent_pack.pokemon:
-                self.parent_pack.pokemon[target].requested += 1
+            if pre_evolution in self.parent_pack.pokemon:
+                self.parent_pack.pokemon[pre_evolution].requested += 1
                 if entry.is_addition:
-                    self.parent_pack.pokemon[target].request_transfered += 1
+                    self.parent_pack.pokemon[pre_evolution].request_transfered += 1
+
+    def _is_requested(self) -> bool:
+        return bool(self.requested - self.request_transfered)
 
     def get_all_export_paths(self):
         res: set[Path] = set()
@@ -828,10 +837,11 @@ class Pack:
         self._get_pokemon()
         self._get_lang()
 
+        self._stamp_forms()
+
         for p in self.pokemon.values():
             p._mark_requests()
 
-        self._stamp_forms()
         if not self.verbose:
             print(clear_line, end="")
             print(f"[{check_mark}] {self.name}")
@@ -1708,6 +1718,7 @@ class Combiner:
             exit()
 
     def export(self) -> None:
+        line_header("EXPORTING")
         for pack in self.packs:
             if pack.is_base or (pack.is_mod and (not self._process_mods)):
                 continue
@@ -1779,7 +1790,7 @@ class Combiner:
     # ------------------------------------------------------------
 
     def _prepare(self) -> None:
-        print(f"\n#{'='*25}\n#  PREPARING\n#{'='*25}\n")
+        line_header("PREPARING")
         self.extraction_path = self.dir_name / ".temp"
         self.extraction_path.mkdir(parents=True, exist_ok=True)
         for p in self.packs:
@@ -1802,24 +1813,31 @@ class Combiner:
     # ------------------------------------------------------------
 
     def _process(self) -> None:
-        print(f"\n#{'='*25}\n#  PROCESSING\n#{'='*25}\n")
+        line_header("PROCESSING")
+
         for p in self.packs:
             p._process()
 
         for p in self.packs:
             self.defined_pokemon.update(list(p.pokemon.keys()))
 
+        line_header("RESOLVING")
+
         # self._resolution_core()
         self._resolution_greedy()
 
-    def _resolution_greedy(self) -> None:
-        _to_check: set[str] = self.defined_pokemon.copy()
-        _checked: set[str] = set()
-
-        _to_check = sorted(
-            _to_check,
+    def _sort_pokemon_str(self, inp: Iterable[str]):
+        return sorted(
+            inp,
             key=lambda x: (
                 max([p.pokemon[x].evo_from for p in self.packs if (x in p.pokemon)]),
+                max(
+                    [
+                        (p.pokemon[x].requested - p.pokemon[x].request_transfered)
+                        for p in self.packs
+                        if (x in p.pokemon)
+                    ]
+                ),
                 (
                     max([p.pokemon[x].evo_to for p in self.packs if (x in p.pokemon)])
                     + max(
@@ -1828,6 +1846,12 @@ class Combiner:
                 ),
             ),
         )
+
+    def _resolution_greedy(self) -> None:
+        _to_check: set[str] = self.defined_pokemon.copy()
+        _checked: set[str] = set()
+
+        _to_check = self._sort_pokemon_str(inp=_to_check)
 
         for p_name in _to_check:
             if sum([1 for p in self.packs if (p_name in p.pokemon)]) == 1:
@@ -1846,12 +1870,7 @@ class Combiner:
         _avail_checks = [self._dual_choice]
         _to_check: set[str] = remaining.copy()
 
-        _to_check = sorted(
-            _to_check,
-            key=lambda x: sum(
-                [p.pokemon[x].evo_from for p in self.packs if (x in p.pokemon)]
-            ),
-        )
+        _to_check = self._sort_pokemon_str(inp=_to_check)
 
         while True:
             _num_flag = False
@@ -1899,12 +1918,7 @@ class Combiner:
     def _greedy_step_rest(self, remaining: set[str]) -> None:
         _to_check: set[str] = remaining.copy()
 
-        _to_check = sorted(
-            _to_check,
-            key=lambda x: sum(
-                [p.pokemon[x].evo_from for p in self.packs if (x in p.pokemon)]
-            ),
-        )
+        _to_check = self._sort_pokemon_str(inp=_to_check)
 
         for p_name in _to_check:
             holder, num, name = self._make_pack_holder(p_name)
@@ -1932,7 +1946,7 @@ class Combiner:
         return holder, d_num, d_name
 
     def _resolution_core(self) -> None:
-        print(f"\n#{'='*25}\n#  RESOLVE\n#{'='*25}\n")
+        line_header("RESOLVING")
         for pok_name in self.defined_pokemon:
             self._resolution_pokemon(pokemon_name=pok_name)
 
@@ -2180,7 +2194,10 @@ class Combiner:
             print(outp)
 
         while True:
-            k_in = positive_int_choice(max_ch=(len(keys) + 1), text="Pack choice: ")
+            k_in = positive_int_choice(
+                max_ch=(len(keys) + 1),
+                text="Pack choice:   [#].Pack  [E]xit",
+            )
             if k_in:
                 break
             else:
