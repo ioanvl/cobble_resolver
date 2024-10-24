@@ -423,6 +423,9 @@ class Pokemon:
         for form in self.forms.values():
             res.update(form.get_all_paths())
         res.update(self.sa_transfers_received)
+        for fa in self.parent_pack.feature_assignments:
+            if self.internal_name in fa.incl_pokemon:
+                res.add(fa.file_path)
         return list(res)
 
     def get_all_paths(self) -> set[Path]:
