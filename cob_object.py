@@ -40,6 +40,23 @@ def bool_square(inp: bool = False) -> str:
     return square_f if inp else square_e
 
 
+def clear_empty_dir(
+    s_path: Path, verbose: bool = False, items_to_delete: list[str] = list()
+):
+    temp = [x for x in s_path.iterdir()]
+    for item in temp:
+        if item.name in items_to_delete:
+            if item.is_dir():
+                shutil.rmtree(item)
+            else:
+                item.unlink()
+
+        if item.is_dir():
+            clear_empty_dir(s_path=item, verbose=verbose)
+            if not len([x for x in item.rglob("*")]):
+                item.rmdir()
+
+
 @dataclass
 class bcfo:
     file_path: Path
@@ -69,6 +86,21 @@ class Feature(bcfo):
 @dataclass
 class FeatureAssignment(bcfo):
     name: str
+    incl_pokemon: list[str]
+
+
+@dataclass
+class LangEntry:
+    name: str
+    file_path: Path
+    source: dict
+    incl_pokemon: set[str] = field(default_factory=set)
+
+
+@dataclass
+class LangResultEntry:
+    name: str
+    data: dict
 
 
 @dataclass
@@ -187,9 +219,9 @@ class EvolutionCollection:
         self.evolutions.remove(ev)
 
 
-# TODO LANG!!
-
 # TODO multiple sources on each location
+# sounds
+# pokedex fix
 
 
 @dataclass
@@ -257,6 +289,8 @@ class PokemonForm:
         for x in [self.species, self.species_additions]:
             if x:
                 res.add(x.file_path)
+        for s in self.spawn_pool:
+            res.add(s)
         if self.parent_pokemon:
             for i in self.resolver_assignments:
                 res.update(self.parent_pokemon.resolvers[i].get_all_paths())
@@ -354,7 +388,7 @@ class Pokemon:
         if not self.parent_pack:
             return  # means the pack hasnt been processed
         self.selected = True
-        self._mark_requests()
+        # self._mark_requests()
 
     def _mark_requests(self) -> None:
         evo_requests: list[EvolutionEntry] = (
@@ -375,12 +409,19 @@ class Pokemon:
                 if entry.is_addition:
                     self.parent_pack.pokemon[target].request_transfered += 1
 
-    def get_all_paths(self):
+    def get_all_export_paths(self):
         res: set[Path] = set()
         for form in self.forms.values():
             res.update(form.get_all_paths())
         res.update(self.sa_transfers_received)
         return list(res)
+
+    def get_all_paths(self) -> set[Path]:
+        res: set[Path] = set()
+        res.update(self.get_all_export_paths())
+        for r in self.resolvers.values():
+            res.update(r.get_all_paths())
+        return res
 
     def __repr__(self) -> str:
         ret: str = f"#{self.dex_id} - "
@@ -458,6 +499,23 @@ class PackLocations:
             or (self.species_features_assignments is not None)
         )
 
+    def _delete_registered_paths(self) -> None:
+        for x in [
+            self.animations,
+            self.models,
+            self.posers,
+            self.resolvers,
+            self.lang,
+            self.textures,
+            self.species,
+            self.species_additions,
+            self.spawn_pool_world,
+            self.species_features,
+            self.species_features_assignments,
+        ]:
+            if x and x.exists() and x.is_dir():
+                shutil.rmtree(x)
+
 
 class Pack:
     def __init__(
@@ -482,6 +540,7 @@ class Pack:
         self.present_animations: dict[str, dict[str, set[Path]]] = dict()
         self.accessed_animations: set[str] = set()
 
+        self.lang_entries: list[LangEntry] = list()
         self.registered_evolutions: EvolutionCollection = EvolutionCollection()
 
         self.is_base: bool = False
@@ -495,30 +554,48 @@ class Pack:
 
     # ============================================================
 
+    def get_all_paths(self) -> None:
+        path_set: set[Path] = set()
+        for p in self.pokemon.values():
+            path_set.update(p.get_all_paths())
+        for f in self.features.values():
+            path_set.add(f.file_path)
+        for f in self.feature_assignments:
+            path_set.add(f.file_path)
+        for x in self.present_animations:
+            for y in self.present_animations[x]:
+                path_set.update(self.present_animations[x][y])
+        for le in self.lang_entries:
+            path_set.add(le.file_path)
+        return path_set
+
     def export(
         self,
         export_path: Path | None = None,
         selected: bool = True,
         export_mods: bool = False,
+        move_leftovers: Path | None = None,
     ):
-        outut_name: str = f"{self.name}_CoRe"
+        outut_name: str = f"{self.name}_CORE"
         if not export_path:
-            export_path = self.folder_location.parent
-            output_path: Path = export_path / outut_name
+            output_path: Path = self.folder_location.parent / outut_name
         else:
             output_path = export_path
 
         output_path.mkdir(parents=True, exist_ok=True)
 
+        _overall_set = self.get_all_paths()
+
+        # -----------------------------------------
         path_set: set[Path] = set()
         delete_set: set[Path] = set()
         mflag = self.is_base or self.is_mod
         if (not mflag) or (mflag and export_mods):
             for pok in self.pokemon.values():
                 if pok.selected or (not selected):
-                    path_set.update(pok.get_all_paths())
+                    path_set.update(pok.get_all_export_paths())
                 else:
-                    delete_set.update(pok.get_all_paths())
+                    delete_set.update(pok.get_all_export_paths())
             for fa in self.feature_assignments:
                 path_set.add(fa.file_path)
 
@@ -531,14 +608,92 @@ class Pack:
 
                 shutil.move(p, np)
                 c += 1
-        for p in delete_set:
-            if p:
-                p.unlink()
+        # -----------------------------------------
+        if not export_path:
+            self._export_langs()
+
+        # -----------------------------------------
+        del_flag = False
+        try:
+            for p in delete_set:
+                if p:
+                    p.unlink()
+
+            self.component_location._delete_registered_paths()
+            clear_empty_dir(
+                s_path=self.folder_location, items_to_delete=["_MACOSX", ".DS_Store"]
+            )
+            del_flag = True
+        except PermissionError:
+            print(f"Could not delete unused files for {self.name}")
+            if move_leftovers:
+                print(".Partial pack will not be produced")
+            del_flag = False
+        # -----------------------------------------
+        # for p_i in ["pack.png", "pack.mcmeta"]:
+        #     if (p := (self.folder_location / p_i)).exists():
+        #         p.unlink()
+
+        if isinstance(move_leftovers, Path) and del_flag:
+            if len(
+                [
+                    i
+                    for i in self.folder_location.rglob("*")
+                    if not str(i).endswith(("pack.mcmeta", "pack.png"))
+                ]
+            ):
+                self._move_leftovers(export_path=move_leftovers)
+
         outp = f"{c} files moved "
         if d := (len(path_set) - c):
             outp += f"- {d} missed "
         outp += f"| {self.name}"
         print(outp)
+
+    def _move_leftovers(self, export_path: Path) -> None:
+        shutil.make_archive(
+            str((export_path / self.name)),
+            format="zip",
+            root_dir=str(self.folder_location),
+        )
+
+    def _export_langs(self, export_path: Path) -> None:
+        langs = self._get_lang_export()
+        l_path = export_path / "assets" / "cobblemon" / "lang"
+        l_path.mkdir(parents=True, exist_ok=True)
+        for l_entry in langs:
+            (l_path / f"{l_entry.name}").write_text(json.dumps(l_entry.data))
+
+    def _get_lang_export(self) -> list[LangResultEntry]:
+        selected = [p for p in self.pokemon if self.pokemon[p].selected]
+        not_selected = [p for p in self.pokemon if (not self.pokemon[p].selected)]
+
+        res = list()
+        for lang in self.lang_entries:
+            res_d: dict[str, str] = dict()
+
+            sk = [p for p in lang.incl_pokemon if p in selected]
+            dk = [p for p in lang.incl_pokemon if p in not_selected]
+            selected_keys = [
+                k
+                for k in lang.source.keys()
+                if ((len(k.split(".")) > 2) and (k.split(".")[2] in sk))
+            ]
+            deselected_keys = [
+                k
+                for k in lang.source.keys()
+                if ((len(k.split(".")) > 2) and (k.split(".")[2] in dk))
+            ]
+
+            for k in selected_keys:
+                res_d[k] = lang.source[k]
+
+            for k in lang.source.keys():
+                if (k not in selected_keys) and (k not in deselected_keys):
+                    res_d[k] = lang.source[k]
+
+            res.append(LangResultEntry(name=lang.name, data=res_d))
+        return res
 
     # ============================================================
 
@@ -671,6 +826,10 @@ class Pack:
         print(f"Processing.. {self.name}")
         self._get_features()
         self._get_pokemon()
+        self._get_lang()
+
+        for p in self.pokemon.values():
+            p._mark_requests()
 
         self._stamp_forms()
         if not self.verbose:
@@ -722,7 +881,12 @@ class Pack:
                     continue
 
                 self.feature_assignments.append(
-                    FeatureAssignment(file_path=t, source=data, name=t.stem)
+                    FeatureAssignment(
+                        file_path=t,
+                        source=data,
+                        name=t.stem,
+                        incl_pokemon=data.get("pokemon", list()),
+                    )
                 )
 
                 # ---------------
@@ -759,6 +923,42 @@ class Pack:
 
         self._resolve_requested_animations()
         self._resolve_un_requested_animations()
+
+    def _get_lang(self) -> None:
+        if (self.component_location is None) or (self.component_location.lang is None):
+            if self.verbose:
+                print("-- No Language data")
+            return
+        print("-- Parsing Language data")
+
+        for t in self.component_location.lang.rglob("*.json"):
+            try:
+                try:
+                    with t.open() as f:
+                        data: dict[str, str] = json.load(f)
+                except (UnicodeDecodeError, JSONDecodeError) as _:
+                    if DEBUG:
+                        print(f"WARN!! - {t}")
+                        _ = input()
+                    continue
+
+                # ---------------
+
+                start_k = "cobblemon.species."
+                len_en = LangEntry(file_path=t, source=data, name=t.name)
+                len_en.incl_pokemon.update(
+                    [k.split(".")[2] for k in data.keys() if k.startswith(start_k)]
+                )
+
+                self.lang_entries.append(len_en)
+
+                # ---------------
+
+            except Exception as e:
+                print(f"\n\n{t}\n\n")
+                raise e
+        if not self.verbose:
+            print(clear_line, end="")
 
     # ------------------------------------------------------------
 
@@ -1509,7 +1709,14 @@ class Combiner:
 
     def export(self) -> None:
         for pack in self.packs:
-            pack.export(export_path=self.output_pack_path)
+            if pack.is_base or (pack.is_mod and (not self._process_mods)):
+                continue
+            pack.export(
+                export_path=self.output_pack_path,
+                move_leftovers=self.output_pack_path.parent,
+            )
+
+        self._export_langs(folder_path=self.output_pack_path)
 
         self._write_pack_mcmeta(folder_path=self.output_pack_path)
 
@@ -1521,6 +1728,27 @@ class Combiner:
             print("Failed to get icon..")
 
         self._compress_pack(folder_path=self.output_pack_path)
+
+        try:
+            shutil.rmtree(str(self.dir_name / ".temp"))
+        except:
+            print(" -Could not remove temporary folder")
+
+    def _export_langs(self, folder_path: Path) -> None:
+        res_d: dict[str, LangResultEntry] = dict()
+        for p in self.packs:
+            l_es: list[LangResultEntry] = p._get_lang_export()
+
+            for entry in l_es:
+                if entry.name in res_d:
+                    res_d[entry.name].data.update(entry.data)
+                else:
+                    res_d[entry.name] = entry
+
+        export_path = folder_path / "assets" / "cobblemon" / "lang"
+        export_path.mkdir(parents=True, exist_ok=True)
+        for l_entry in res_d.values():
+            (export_path / l_entry.name).write_text(json.dumps(l_entry.data))
 
     def _get_pack_mcmeta(self) -> dict[str, dict[str, Any]]:
         return {"pack": {"pack_format": 15, "description": "CORE Test"}}
