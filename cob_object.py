@@ -462,11 +462,11 @@ class Pokemon:
 class PackLocations:
     home_location: Path | None = None
 
-    resolvers: Path | None = None
-    models: Path | None = None
+    resolvers: set[Path] = set()
+    models: set[Path] = set()
     textures: Path | None = None
-    animations: Path | None = None
-    posers: Path | None = None
+    animations: set[Path] = set()
+    posers: set[Path] = set()
 
     lang: Path | None = None
 
@@ -498,11 +498,11 @@ class PackLocations:
 
     def __bool__(self) -> bool:
         return (
-            (self.resolvers is not None)
-            or (self.models is not None)
+            bool(self.resolvers)
+            or bool(self.models)
+            or bool(self.animations)
+            or bool(self.posers)
             or (self.textures is not None)
-            or (self.animations is not None)
-            or (self.posers is not None)
             or (self.lang is not None)
             or (self.species is not None)
             or (self.species_additions is not None)
@@ -513,10 +513,6 @@ class PackLocations:
 
     def _delete_registered_paths(self) -> None:
         for x in [
-            self.animations,
-            self.models,
-            self.posers,
-            self.resolvers,
             self.lang,
             self.textures,
             self.species,
@@ -527,6 +523,15 @@ class PackLocations:
         ]:
             if x and x.exists() and x.is_dir():
                 shutil.rmtree(x)
+        for y in [
+            self.animations,  #
+            self.models,  #
+            self.posers,  #
+            self.resolvers,  #
+        ]:
+            for x in y:
+                if x and x.exists() and x.is_dir():
+                    shutil.rmtree(x)
 
 
 class Pack:
@@ -788,48 +793,50 @@ class Pack:
                     temp_assets_bedrock = temp_assets_bedrock / "pokemon"
 
                 if (x := temp_assets_bedrock / "animations").exists():
-                    val.animations = x
+                    val.animations.add(x)
                 if (x := temp_assets_bedrock / "models").exists():
-                    val.models = x
+                    val.models.add(x)
                 if (x := temp_assets_bedrock / "posers").exists():
-                    val.posers = x
+                    val.posers.add(x)
                 if (x := temp_assets_bedrock / "resolvers").exists():
-                    val.resolvers = x
+                    val.resolvers.add(x)
                 elif (x := temp_assets_bedrock / "species").exists():
-                    val.resolvers = x
+                    val.resolvers.add(x)
             if (temp_assets / "lang").exists():
                 val.lang = temp_assets / "lang"
             if (temp_assets / "textures" / "pokemon").exists():
                 val.textures = temp_assets / "textures" / "pokemon"
 
-        data_flag = False
-        if (temp_data := self.folder_location / "data" / "cobblemon").exists():
-            data_flag = True
-        elif (temp_data := self.folder_location / "data").exists():
-            for candidate in temp_data.iterdir():
-                if candidate.is_dir():
-                    if (
-                        ((candidate / "spawn_pool_world").exists())
-                        or ((candidate / "species").exists())
-                        or ((candidate / "species_additions").exists())
-                        or ((candidate / "species_features").exists())
-                        or ((candidate / "species_feature_assignments").exists())
-                    ):
-                        temp_data = candidate
-                        data_flag = True
-                        break
+        for data_candidate in [
+            "data/cobblemon",
+            "data",
+        ]:
+            data_flag = False
+            if (temp_data := self.folder_location / data_candidate).exists():
+                for candidate in temp_data.iterdir():
+                    if candidate.is_dir():
+                        if (
+                            ((candidate / "spawn_pool_world").exists())
+                            or ((candidate / "species").exists())
+                            or ((candidate / "species_additions").exists())
+                            or ((candidate / "species_features").exists())
+                            or ((candidate / "species_feature_assignments").exists())
+                        ):
+                            temp_data = candidate
+                            data_flag = True
+                            break
 
-        if data_flag:
-            if (x := temp_data / "spawn_pool_world").exists():
-                val.spawn_pool_world = x
-            if (x := temp_data / "species").exists():
-                val.species = x
-            if (x := temp_data / "species_additions").exists():
-                val.species_additions = x
-            if (x := temp_data / "species_features").exists():
-                val.species_features = x
-            if (x := temp_data / "species_feature_assignments").exists():
-                val.species_features_assignments = x
+            if data_flag:
+                if (x := temp_data / "spawn_pool_world").exists():
+                    val.spawn_pool_world = x
+                if (x := temp_data / "species").exists():
+                    val.species = x
+                if (x := temp_data / "species_additions").exists():
+                    val.species_additions = x
+                if (x := temp_data / "species_features").exists():
+                    val.species_features = x
+                if (x := temp_data / "species_feature_assignments").exists():
+                    val.species_features_assignments = x
         self.component_location = val
 
     # ============================================================
@@ -1244,102 +1251,100 @@ class Pack:
 
     def _get_looks_resolvers(self) -> None:  # STEP 2
         """STEP 2 - parse through resolvers"""
-        if (self.component_location is None) or (
-            self.component_location.resolvers is None
-        ):
+        if (self.component_location is None) or (not self.component_location.resolvers):
             if self.verbose:
                 print("-- No Resolver Data")
             return
         print("-- Parsing Resolver Data")
 
-        if self.component_location.posers:
-            for t in self.component_location.posers.rglob("*.json"):
+        for t_set in self.component_location.posers:
+            for t in t_set.rglob("*.json"):
                 self.component_location.posers_dict[t.stem] = t
 
-        if self.component_location.models:
-            for t in self.component_location.models.rglob("*.json"):
+        for t_set in self.component_location.models:
+            for t in t_set.rglob("*.json"):
                 self.component_location.models_dict[t.stem] = t
 
         if self.component_location.textures:
             for t in self.component_location.textures.rglob("*.png"):
                 self.component_location.textures_dict[t.stem] = t
 
-        for t in self.component_location.resolvers.rglob("*.json"):
-            try:
+        for t_set in self.component_location.resolvers:
+            for t in t_set.rglob("*.json"):
                 try:
-                    with t.open() as f:
-                        data = json.load(f)
-                except (UnicodeDecodeError, JSONDecodeError) as _:
-                    if DEBUG:
-                        print(f"WARN!! - {t}")
-                        _ = input()
-                    continue
+                    try:
+                        with t.open() as f:
+                            data = json.load(f)
+                    except (UnicodeDecodeError, JSONDecodeError) as _:
+                        if DEBUG:
+                            print(f"WARN!! - {t}")
+                            _ = input()
+                        continue
 
-                # ---------------
-                pok_name: str = str(data["species"]).split(":")[-1]
+                    # ---------------
+                    pok_name: str = str(data["species"]).split(":")[-1]
 
-                if pok_name not in self.pokemon:
-                    self.pokemon[pok_name] = Pokemon(
-                        internal_name=pok_name,
-                        dex_id=-1,
-                        forms={"base_form": PokemonForm(name="base_form")},
-                    )
+                    if pok_name not in self.pokemon:
+                        self.pokemon[pok_name] = Pokemon(
+                            internal_name=pok_name,
+                            dex_id=-1,
+                            forms={"base_form": PokemonForm(name="base_form")},
+                        )
 
-                order = data.get("order", -1)
-                if order in list(self.pokemon[pok_name].resolvers.keys()):
-                    # if for some reason theres a duplicate key, give it a new negative one
-                    order = (
-                        min(min(list(self.pokemon[pok_name].resolvers.keys())), 0) - 1
-                    )
+                    order = data.get("order", -1)
+                    if order in list(self.pokemon[pok_name].resolvers.keys()):
+                        # if for some reason theres a duplicate key, give it a new negative one
+                        order = (
+                            min(min(list(self.pokemon[pok_name].resolvers.keys())), 0)
+                            - 1
+                        )
 
-                new_resolver_entry = ResolverEntry(order=order, own_path=t)
-                aspects: list[str] = list()
-                # ----- parsing through variations
-                for v in data.get("variations", list()):
-                    new_resolver_entry = self._resolve_variation_or_layer(
-                        entry=v, existing_resolver=new_resolver_entry
-                    )
-                    v_aspects = v.get("aspects", list())
-                    aspects.extend(v_aspects)
+                    new_resolver_entry = ResolverEntry(order=order, own_path=t)
+                    aspects: list[str] = list()
+                    # ----- parsing through variations
+                    for v in data.get("variations", list()):
+                        new_resolver_entry = self._resolve_variation_or_layer(
+                            entry=v, existing_resolver=new_resolver_entry
+                        )
+                        v_aspects = v.get("aspects", list())
+                        aspects.extend(v_aspects)
 
-                # ----- assignemt to correct subforms
-                aspects = list(set(aspects))
+                    # ----- assignemt to correct subforms
+                    aspects = list(set(aspects))
 
-                if "shiny" in aspects:
-                    new_resolver_entry.has_shiny = True
-                    aspects.remove("shiny")
+                    if "shiny" in aspects:
+                        new_resolver_entry.has_shiny = True
+                        aspects.remove("shiny")
 
-                flag = False
-                for asp in aspects:
-                    for form in self.pokemon[pok_name].forms.values():
-                        if asp in form.aspects:
-                            form.resolver_assignments.add(order)
-                            flag = True
-                if not flag:
-                    self.pokemon[pok_name].forms["base_form"].resolver_assignments.add(
-                        order
-                    )
+                    flag = False
+                    for asp in aspects:
+                        for form in self.pokemon[pok_name].forms.values():
+                            if asp in form.aspects:
+                                form.resolver_assignments.add(order)
+                                flag = True
+                    if not flag:
+                        self.pokemon[pok_name].forms[
+                            "base_form"
+                        ].resolver_assignments.add(order)
 
-                self.pokemon[pok_name].resolvers[order] = new_resolver_entry
+                    self.pokemon[pok_name].resolvers[order] = new_resolver_entry
 
-                # ---------------
+                    # ---------------
 
-            except Exception as e:
-                print(f"\n\n{t}\n\n")
-                raise e
+                except Exception as e:
+                    print(f"\n\n{t}\n\n")
+                    raise e
         if not self.verbose:
             print(clear_line, end="")
 
     def _resolve_variation_or_layer(
         self, entry: dict, existing_resolver: ResolverEntry
     ) -> ResolverEntry:
-        if self.component_location.posers:
+        for _temp_ in self.component_location.posers:
             if x := entry.get("poser", ""):
                 poser_name: str = str(x).split(":")[-1]
 
-                if (
-                    epath := self.component_location.posers / f"{poser_name}.json"
-                ).exists():
+                if (epath := _temp_ / f"{poser_name}.json").exists():
                     existing_resolver.posers.add(epath)
                     if poser_name in self.component_location.posers_dict:
                         del self.component_location.posers_dict[poser_name]
@@ -1350,12 +1355,11 @@ class Pack:
                         )
                         del self.component_location.posers_dict[poser_name]
 
-        if self.component_location.models:
+        for _temp_ in self.component_location.models:
+            # if self.component_location.models:
             if x := entry.get("model", ""):
                 model_name: str = str(x).split(":")[-1]
-                if (
-                    epath := self.component_location.models / f"{model_name}.json"
-                ).exists():
+                if (epath := _temp_ / f"{model_name}.json").exists():
                     existing_resolver.models.add(epath)
                     if model_name in self.component_location.models_dict:
                         del self.component_location.models_dict[model_name]
@@ -1404,50 +1408,51 @@ class Pack:
 
     def _get_looks_animations(self) -> None:  # STEP 3
         if (self.component_location is None) or (
-            self.component_location.animations is None
+            not self.component_location.animations
         ):
             if self.verbose:
                 print("-- No Animations")
             return
         print("-- Parsing Animations")
 
-        for t in self.component_location.animations.rglob("*.json"):
-            try:
+        for t_e in self.component_location.animations:
+            for t in t_e.rglob("*.json"):
                 try:
-                    with t.open() as f:
-                        data = json.load(f)
-                except (UnicodeDecodeError, JSONDecodeError) as _:
-                    if DEBUG:
-                        print(f"WARN!! - {t}")
-                        _ = input()
-                    continue
+                    try:
+                        with t.open() as f:
+                            data = json.load(f)
+                    except (UnicodeDecodeError, JSONDecodeError) as _:
+                        if DEBUG:
+                            print(f"WARN!! - {t}")
+                            _ = input()
+                        continue
 
-                # ---------------
-                anims = data.get("animations", dict())
-                if not isinstance(anims, dict):
-                    continue
+                    # ---------------
+                    anims = data.get("animations", dict())
+                    if not isinstance(anims, dict):
+                        continue
 
-                for key in anims.keys():
-                    key_parts: list[str] = str(key).split(".")
-                    if len(key_parts) == 1:
-                        # no animation group, e.g. pikachu's "education"
-                        name = "__null__"
-                        move = key_parts[0]
-                    else:
-                        name = key_parts[1]
-                        move = key_parts[2]
+                    for key in anims.keys():
+                        key_parts: list[str] = str(key).split(".")
+                        if len(key_parts) == 1:
+                            # no animation group, e.g. pikachu's "education"
+                            name = "__null__"
+                            move = key_parts[0]
+                        else:
+                            name = key_parts[1]
+                            move = key_parts[2]
 
-                    if name not in self.present_animations:
-                        self.present_animations[name] = dict()
-                    if move not in self.present_animations[name]:
-                        self.present_animations[name][move] = set()
-                    self.present_animations[name][move].add(t)
+                        if name not in self.present_animations:
+                            self.present_animations[name] = dict()
+                        if move not in self.present_animations[name]:
+                            self.present_animations[name][move] = set()
+                        self.present_animations[name][move].add(t)
 
-                # ---------------
+                    # ---------------
 
-            except Exception as e:
-                print(f"\n\n{t}\n\n")
-                raise e
+                except Exception as e:
+                    print(f"\n\n{t}\n\n")
+                    raise e
         if not self.verbose:
             print(clear_line, end="")
 
