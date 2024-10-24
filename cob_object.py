@@ -14,6 +14,7 @@ DEBUG = False
 square_f = "\u25a3"
 square_e = "\u25a1"
 check_mark = "\u2713"
+clear_line = f"\033[A\r{' '*40}\r"
 
 default_animation_types: list[str] = [
     "ground_idle",
@@ -310,6 +311,17 @@ class PokemonForm:
             return {}
         return {r: self.parent_pokemon.resolvers[r] for r in self.resolver_assignments}
 
+    def is_requested(self) -> bool:
+        if self.parent_pokemon:
+            return bool(
+                self.parent_pokemon.requested
+                and (
+                    self.parent_pokemon.requested
+                    - self.parent_pokemon.request_transfered
+                )
+            )
+        return False
+
     def _st(self) -> LiteralString:
         return f"{' '*(3 if (self.name != 'base_form') else 0)}|"
 
@@ -475,6 +487,8 @@ class Pack:
         self.is_base: bool = False
         self.is_mod: bool = False
 
+        self.verbose: bool = False
+
     def run(self) -> None:
         self._prepare()
         self._process()
@@ -534,11 +548,7 @@ class Pack:
         self._determine_base()
         self._get_paths()
 
-        self.name = (
-            "BASE"
-            if (self.is_base and (self.folder_location.name == "resources"))
-            else self.folder_location.name
-        )
+        self.name = "BASE" if (self.is_base) else self.folder_location.name
 
         outp = f"{self.name}  -  Mod:{bool_square(self.is_mod)} "
         outp += f"BASE:{bool_square(self.is_base)}\n "
@@ -568,8 +578,10 @@ class Pack:
     def _unpack(self) -> None:
         if self.zip_location is None:
             return
+        print(f"Unpacking {self.zip_location.name}")
         with zipfile.ZipFile(str(self.zip_location), "r") as zip_ref:
             zip_ref.extractall(self.folder_location)
+        print(f"\033[A\r{' '*40}\r", end="")
 
     def _determine_base(self) -> None:
         if (
@@ -581,12 +593,24 @@ class Pack:
             self.folder_location = (
                 self.folder_location / "common" / "src" / "main" / "resources"
             )
+            return
         if (self.folder_location / "LICENSE").exists():
             self.is_mod = True
 
             check = [c for c in self.folder_location.rglob("*cobblemon-common*")]
             if len(check):
                 self.is_base = True
+                return
+        if (x := (self.folder_location / "fabric.mod.json")).exists():
+            self.is_mod = True
+            try:
+                with x.open() as f:
+                    data = json.load(f)
+                    if data.get("id", "") == "cobblemon":
+                        self.is_base = True
+                        return
+            except:
+                pass
 
     def _get_paths(self) -> None:
         val = PackLocations()
@@ -644,11 +668,14 @@ class Pack:
     # ============================================================
 
     def _process(self) -> None:
-        print(f"Running pack: {self.name}")
+        print(f"Processing.. {self.name}")
         self._get_features()
         self._get_pokemon()
 
         self._stamp_forms()
+        if not self.verbose:
+            print(clear_line, end="")
+            print(f"[{check_mark}] {self.name}")
 
     # ------------------------------------------------------------
 
@@ -656,7 +683,8 @@ class Pack:
         if (self.component_location is None) or (
             self.component_location.species_features is None
         ):
-            print("-- No Features")
+            if self.verbose:
+                print("-- No Features")
             return
         print("-- Parsing Features")
 
@@ -673,11 +701,15 @@ class Pack:
                     source=data,
                 )
 
+        if not self.verbose:
+            print(clear_line, end="")
+
     def _get_feature_assignments(self) -> None:  # STEP 0b #TODO?
         if (self.component_location is None) or (
             self.component_location.species_features_assignments is None
         ):
-            print("-- No Feature Assignments")
+            if self.verbose:
+                print("-- No Feature Assignments")
             return
         print("-- Parsing Feature Assignments")
 
@@ -700,6 +732,8 @@ class Pack:
             except Exception as e:
                 print(f"\n\n{t}\n\n")
                 raise e
+        if not self.verbose:
+            print(clear_line, end="")
 
     # ------------------------------------------------------------
 
@@ -733,7 +767,8 @@ class Pack:
         if (self.component_location is None) or (
             self.component_location.species is None
         ):
-            print("-- No Species")
+            if self.verbose:
+                print("-- No Species")
             return
         print("-- Parsing Species")
 
@@ -777,6 +812,9 @@ class Pack:
                 print(f"\n\n{t}\n\n")
                 raise e
 
+        if not self.verbose:
+            print(clear_line, end="")
+
     def _register_evolutions(
         self, data: dict, name: str, file_path: Path, is_addition: bool = False
     ) -> None:
@@ -810,7 +848,8 @@ class Pack:
         if (self.component_location is None) or (
             self.component_location.species_additions is None
         ):
-            print("-- No Species Additions")
+            if self.verbose:
+                print("-- No Species Additions")
             return
         print("-- Parsing Species Additions")
 
@@ -880,12 +919,15 @@ class Pack:
             except Exception as e:
                 print(f"\n\n{t}\n\n")
                 raise e
+        if not self.verbose:
+            print(clear_line, end="")
 
     def _get_data_spawn(self) -> None:  # STEP 1c
         if (self.component_location is None) or (
             self.component_location.spawn_pool_world is None
         ):
-            print("-- No Spawn Data")
+            if self.verbose:
+                print("-- No Spawn Data")
             return
         print("-- Parsing Spawn Data")
 
@@ -982,6 +1024,8 @@ class Pack:
             except Exception as e:
                 print(f"\n\n{in_spawn_file}\n\n")
                 raise e
+        if not self.verbose:
+            print(clear_line, end="")
 
     # ------------------------------------------------------------
 
@@ -990,7 +1034,8 @@ class Pack:
         if (self.component_location is None) or (
             self.component_location.resolvers is None
         ):
-            print("-- No Resolver Data")
+            if self.verbose:
+                print("-- No Resolver Data")
             return
         print("-- Parsing Resolver Data")
 
@@ -1034,7 +1079,7 @@ class Pack:
                         min(min(list(self.pokemon[pok_name].resolvers.keys())), 0) - 1
                     )
 
-                new_resolver_entry = ResolverEntry(order=order)
+                new_resolver_entry = ResolverEntry(order=order, own_path=t)
                 aspects: list[str] = list()
                 # ----- parsing through variations
                 for v in data.get("variations", list()):
@@ -1069,6 +1114,8 @@ class Pack:
             except Exception as e:
                 print(f"\n\n{t}\n\n")
                 raise e
+        if not self.verbose:
+            print(clear_line, end="")
 
     def _resolve_variation_or_layer(
         self, entry: dict, existing_resolver: ResolverEntry
@@ -1146,7 +1193,8 @@ class Pack:
         if (self.component_location is None) or (
             self.component_location.animations is None
         ):
-            print("-- No Animations")
+            if self.verbose:
+                print("-- No Animations")
             return
         print("-- Parsing Animations")
 
@@ -1187,6 +1235,8 @@ class Pack:
             except Exception as e:
                 print(f"\n\n{t}\n\n")
                 raise e
+        if not self.verbose:
+            print(clear_line, end="")
 
     def _update_defined_animation_types(self) -> None:  # STEP 3b
         self.defined_animation_types.update(default_animation_types)
@@ -1429,6 +1479,8 @@ class Combiner:
         else:
             self.dir_name = dir_name
 
+        self.output_pack_path = self.dir_name / "output" / "CORE_Pack"
+
         self.extraction_path: str = ""
 
         self.pack_paths: set[Path] = set()
@@ -1440,18 +1492,45 @@ class Combiner:
         self._allow_risky_rules = True
 
     def run(self) -> None:
+        self._prep_output_path()
         self._gather_packs()
         self._prepare()
         self._process()
         self.export()
 
-    def export(self):
-        pack_path = self.dir_name / "output" / "CORE_Pack"
-        if pack_path.exists():
-            if pack_path.is_dir():
-                shutil.rmtree(pack_path)
+    def _prep_output_path(self) -> None:
+        try:
+            if self.output_pack_path.exists():
+                if self.output_pack_path.is_dir():
+                    shutil.rmtree(self.output_pack_path)
+        except:
+            print("Failed preparing output folder")
+            exit()
+
+    def export(self) -> None:
         for pack in self.packs:
-            pack.export(export_path=pack_path)
+            pack.export(export_path=self.output_pack_path)
+
+        self._write_pack_mcmeta(folder_path=self.output_pack_path)
+
+        try:
+            shutil.move(
+                Path("pack.png").resolve(), (self.output_pack_path / "pack.png")
+            )
+        except:
+            print("Failed to get icon..")
+
+        self._compress_pack(folder_path=self.output_pack_path)
+
+    def _get_pack_mcmeta(self) -> dict[str, dict[str, Any]]:
+        return {"pack": {"pack_format": 15, "description": "CORE Test"}}
+
+    def _write_pack_mcmeta(self, folder_path: Path) -> None:
+        mc = self._get_pack_mcmeta()
+        (folder_path / "pack.mcmeta").write_text(json.dumps(mc))
+
+    def _compress_pack(self, folder_path: Path) -> None:
+        shutil.make_archive(str(folder_path), format="zip", root_dir=str(folder_path))
 
     # ------------------------------------------------------------
 
@@ -1511,8 +1590,14 @@ class Combiner:
 
         _to_check = sorted(
             _to_check,
-            key=lambda x: max(
-                [p.pokemon[x].evo_from for p in self.packs if (x in p.pokemon)]
+            key=lambda x: (
+                max([p.pokemon[x].evo_from for p in self.packs if (x in p.pokemon)]),
+                (
+                    max([p.pokemon[x].evo_to for p in self.packs if (x in p.pokemon)])
+                    + max(
+                        [p.pokemon[x].evo_from for p in self.packs if (x in p.pokemon)]
+                    )
+                ),
             ),
         )
 
@@ -1581,7 +1666,7 @@ class Combiner:
                         p_name
                     )  # TODO IS this dangerous? editing but also breaking
                     break
-        self._greedy_step_rest()
+        self._greedy_step_rest(remaining=_to_check)
 
     def _greedy_step_rest(self, remaining: set[str]) -> None:
         _to_check: set[str] = remaining.copy()
@@ -1755,6 +1840,9 @@ class Combiner:
                 self._dual_choice_mod_and_pack_addition,
                 self._dual_choice_mod_and_species,
                 self._dual_choice_mod_w_g_and_spawn,
+                self._dual_choice_mod_and_req_pack,
+                self._dual_choice_mod_and_req_pack_2,
+                self._dual_choice_mod_remodel,
             ]:
                 pack, stype = _check(pok_mod=fm, pok_other=fo)
                 if pack is not None:
@@ -1803,9 +1891,45 @@ class Combiner:
 
         return (None, None)
 
+    def _dual_choice_mod_and_req_pack(
+        self, pok_mod: PokemonForm, pok_other: PokemonForm
+    ) -> tuple[str, Literal["G5-R"]] | tuple[None, None]:
+        if self._allow_risky_rules:
+            if pok_mod.is_complete() and (
+                (not pok_other.has_graphics()) and (pok_other.is_requested())
+            ):
+                return (pok_other.parent_pack.name, "G5-R")
+        return (None, None)
+
+    def _dual_choice_mod_and_req_pack_2(
+        self, pok_mod: PokemonForm, pok_other: PokemonForm
+    ) -> tuple[str, Literal["G5-R"]] | tuple[None, None]:
+        if self._allow_risky_rules:
+            if pok_mod.is_complete() and (
+                (pok_other.has_graphics())
+                and (pok_other.is_requested())
+                and pok_other.has_spawn()
+                and (not pok_other.has_sp_data())
+            ):
+                return (pok_other.parent_pack.name, "G5_2-R")
+        return (None, None)
+
+    def _dual_choice_mod_remodel(
+        self, pok_mod: PokemonForm, pok_other: PokemonForm
+    ) -> tuple[str, Literal["G5-R"]] | tuple[None, None]:
+        if pok_mod.is_complete() and (
+            (not pok_other.has_spawn())
+            and (not pok_other.has_sp_data() and pok_other.is_graphically_complete())
+        ):
+            return (pok_other.parent_pack.name, "G5-R")
+        return (None, None)
+
     def _print_pack_choise(
         self, number: int, name: str, selected_pack: str, selection_type: str = "M"
     ) -> None:
+        x = [p for p in self.packs if p.name == selected_pack][0]
+        if (x.is_base) or (x.is_mod and (not self._process_mods)):
+            return
         if not ((selection_type == "A") and selected_pack == "BASE"):
             print(
                 f"-- AUTO [{selection_type}] -- \n#{number} - {name}  [{selected_pack}]"
@@ -1823,13 +1947,18 @@ class Combiner:
             p = holder[pack_name]
             outp = repr(p)
             out_parts = outp.split("\n")
-            out_parts[0] = f"{i}. {pack_name}"
+            out_parts[0] = f"{i+1}. {pack_name}"
             outp = "\n".join(out_parts)
             print(outp)
 
-        k_in = positive_int_choice(max_ch=len(keys), text="Pack choice: ")
+        while True:
+            k_in = positive_int_choice(max_ch=(len(keys) + 1), text="Pack choice: ")
+            if k_in:
+                break
+            else:
+                print(f"\033[A\r{' '*40}\r", end="")
 
-        selected_key = keys[k_in]
+        selected_key = keys[k_in - 1]
         holder[selected_key].select()
         print(f"\033[A\r{' '*40}\r", end="")
         print(f"- {k_in}. [{selected_key}]")
@@ -1841,7 +1970,7 @@ class Combiner:
         pass
 
 
-RUN_TYPE = 1
+RUN_TYPE = 2
 SELECTED_PACK = [1, 3, 7]
 
 if __name__ == "__main__":
