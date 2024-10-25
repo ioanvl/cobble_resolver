@@ -227,12 +227,15 @@ class EvolutionCollection:
 # TODO sounds
 # TODO pokedex fix
 
+# TODO previous choice(s)
+# stack and push pop, and move, etc
+
 # TODO ...merging?
 
 
 @dataclass
 class PokemonForm:
-    name: str
+    name: str | None = None
 
     aspects: list[str] = field(default_factory=list)
     # looks
@@ -250,7 +253,7 @@ class PokemonForm:
         s: str = self._st()
         ret: str = ""
         if self.name != "base_form":
-            ret += f"{s} {self.name}\n"
+            ret += f"{s} {self.name if self.name else self.aspects}\n"
         ret += f"{s} "
         ret += f"DATA: Spawn:{bool_square(len(self.spawn_pool))} | "
         ret += f"S:{self.__square_atr(self.species)}"
@@ -462,11 +465,11 @@ class Pokemon:
 class PackLocations:
     home_location: Path | None = None
 
-    resolvers: set[Path] = set()
-    models: set[Path] = set()
+    resolvers: set[Path] = field(default_factory=set)
+    models: set[Path] = field(default_factory=set)
     textures: Path | None = None
-    animations: set[Path] = set()
-    posers: set[Path] = set()
+    animations: set[Path] = field(default_factory=set)
+    posers: set[Path] = field(default_factory=set)
 
     lang: Path | None = None
 
@@ -669,7 +672,7 @@ class Pack:
 
     def _move_leftovers(self, export_path: Path) -> None:
         shutil.make_archive(
-            str((export_path / self.name)),
+            f"{str((export_path / self.name))} - CORE_Edit",
             format="zip",
             root_dir=str(self.folder_location),
         )
@@ -786,26 +789,27 @@ class Pack:
 
     def _get_paths(self) -> None:
         val = PackLocations()
+        if self.name.startswith("Genomo"):
+            pass
         val.home_location = self.folder_location
-        if (temp_assets := self.folder_location / "assets" / "cobblemon").exists():
-            if (temp_assets_bedrock := (temp_assets / "bedrock")).exists():
-                if (temp_assets_bedrock / "pokemon").exists():
-                    temp_assets_bedrock = temp_assets_bedrock / "pokemon"
-
-                if (x := temp_assets_bedrock / "animations").exists():
-                    val.animations.add(x)
-                if (x := temp_assets_bedrock / "models").exists():
-                    val.models.add(x)
-                if (x := temp_assets_bedrock / "posers").exists():
-                    val.posers.add(x)
-                if (x := temp_assets_bedrock / "resolvers").exists():
-                    val.resolvers.add(x)
-                elif (x := temp_assets_bedrock / "species").exists():
-                    val.resolvers.add(x)
-            if (temp_assets / "lang").exists():
-                val.lang = temp_assets / "lang"
-            if (temp_assets / "textures" / "pokemon").exists():
-                val.textures = temp_assets / "textures" / "pokemon"
+        if (temp_assets := self.folder_location / "assets").exists():
+            for tmpast in temp_assets.iterdir():
+                for looks_candidate in ["bedrock", "bedrock/pokemon"]:
+                    if (temp_assets_bedrock := (tmpast / looks_candidate)).exists():
+                        if (x := temp_assets_bedrock / "animations").exists():
+                            val.animations.add(x)
+                        if (x := temp_assets_bedrock / "models").exists():
+                            val.models.add(x)
+                        if (x := temp_assets_bedrock / "posers").exists():
+                            val.posers.add(x)
+                        if (x := temp_assets_bedrock / "resolvers").exists():
+                            val.resolvers.add(x)
+                        elif (x := temp_assets_bedrock / "species").exists():
+                            val.resolvers.add(x)
+                if (tmpast / "lang").exists():
+                    val.lang = tmpast / "lang"
+                if (tmpast / "textures" / "pokemon").exists():
+                    val.textures = tmpast / "textures" / "pokemon"
 
         for data_candidate in [
             "data/cobblemon",
@@ -837,6 +841,7 @@ class Pack:
                     val.species_features = x
                 if (x := temp_data / "species_feature_assignments").exists():
                     val.species_features_assignments = x
+
         self.component_location = val
 
     # ============================================================
@@ -1180,8 +1185,8 @@ class Pack:
                             forms={"base_form": PokemonForm(name="base_form")},
                         )
 
-                    flag = False
-                    if len(pok_parts) > 1:
+                    aspect = ""
+                    if len(pok_parts) > 1:  # try to find an aspect
                         feat_parts: list[str] = pok_parts[1].split("=")
 
                         if len(feat_parts) > 1:  # choice
@@ -1225,13 +1230,25 @@ class Pack:
                         else:
                             aspect = feat_parts[0]
 
+                        # for form in self.pokemon[pok_name].forms.values():
+                        #     if aspect in form.aspects:
+                        #         form.spawn_pool.append(in_spawn_file)
+                        #         form.spawn_pool = list(set(form.spawn_pool))
+                        #         flag = True
+
+                    if aspect:  # if you found an aspect, match it or create
+                        flag = False
                         for form in self.pokemon[pok_name].forms.values():
                             if aspect in form.aspects:
                                 form.spawn_pool.append(in_spawn_file)
                                 form.spawn_pool = list(set(form.spawn_pool))
                                 flag = True
-                                break
-                    if not flag:
+                        if not flag:
+                            new_form = PokemonForm(name=f"--{aspect}")
+                            new_form.spawn_pool.append(in_spawn_file)
+                            self.pokemon[pok_name].forms[new_form.name] = new_form
+
+                    else:  # else add to primary
                         self.pokemon[pok_name].forms["base_form"].spawn_pool.append(
                             in_spawn_file
                         )
@@ -2095,6 +2112,7 @@ class Combiner:
                 self._dual_choice_mod_remodel,
                 self._dual_choice_card,
                 self._dual_choice_card_2,
+                self._dual_choice_card_3,
             ]:
                 pack, stype = _check(pok_mod=fm, pok_other=fo)
                 if pack is not None:
@@ -2178,7 +2196,7 @@ class Combiner:
 
     def _dual_choice_card(
         self, pok_mod: PokemonForm, pok_other: PokemonForm
-    ) -> tuple[str, Literal["G5-R"]] | tuple[None, None]:
+    ) -> tuple[str, Literal["CARD"]] | tuple[None, None]:
         if (
             pok_mod.is_complete()
             and pok_mod.parent_pack.is_base
@@ -2191,14 +2209,27 @@ class Combiner:
 
     def _dual_choice_card_2(
         self, pok_mod: PokemonForm, pok_other: PokemonForm
-    ) -> tuple[str, Literal["G5-R"]] | tuple[None, None]:
+    ) -> tuple[str, Literal["CARD2"]] | tuple[None, None]:
         if (
             pok_mod.parent_pack.is_base
             and (not pok_mod.has_spawn())
             and (not pok_mod.has_graphics())
-            and pok_other.has_graphics()
+            and (pok_other.comp_stamp[4:] == [True, False, False, True, True])
         ):
-            return (pok_mod.parent_pack.name, "CARD2")
+            return (pok_other.parent_pack.name, "CARD2")
+        return (None, None)
+
+    def _dual_choice_card_3(
+        self, pok_mod: PokemonForm, pok_other: PokemonForm
+    ) -> tuple[str, Literal["CARD3"]] | tuple[None, None]:
+        if (
+            pok_mod.parent_pack.is_base
+            and (pok_mod.is_graphically_complete())
+            and (not pok_other.has_spawn())
+            and (not pok_other.has_sp_data())
+            and (pok_other.comp_stamp[4:] == [True, False, False, True, True])
+        ):
+            return (pok_mod.parent_pack.name, "CARD3")
         return (None, None)
 
     def _print_pack_choise(
@@ -2206,7 +2237,7 @@ class Combiner:
     ) -> None:
         x = [p for p in self.packs if p.name == selected_pack][0]
         if (x.is_base and (selection_type in ["A"])) or (
-            x.is_mod and (not self._process_mods)
+            (x.is_mod and (not x.is_base)) and (not self._process_mods)
         ):
             return
 
