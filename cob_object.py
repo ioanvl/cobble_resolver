@@ -418,7 +418,7 @@ class Pokemon:
                 if entry.is_addition:
                     self.parent_pack.pokemon[pre_evolution].request_transfered += 1
 
-    def _is_requested(self) -> bool:
+    def _remaining_requests(self) -> bool:
         return bool(self.requested - self.request_transfered)
 
     def get_all_export_paths(self):
@@ -470,6 +470,9 @@ class PackLocations:
     textures: Path | None = None
     animations: set[Path] = field(default_factory=set)
     posers: set[Path] = field(default_factory=set)
+
+    sounds: set[Path] = field(default_factory=set)
+    sound_jsons: set[Path] = field(default_factory=set)
 
     lang: Path | None = None
 
@@ -789,8 +792,7 @@ class Pack:
 
     def _get_paths(self) -> None:
         val = PackLocations()
-        if self.name.startswith("Genomo"):
-            pass
+
         val.home_location = self.folder_location
         if (temp_assets := self.folder_location / "assets").exists():
             for tmpast in temp_assets.iterdir():
@@ -806,16 +808,19 @@ class Pack:
                             val.resolvers.add(x)
                         elif (x := temp_assets_bedrock / "species").exists():
                             val.resolvers.add(x)
-                if (tmpast / "lang").exists():
-                    val.lang = tmpast / "lang"
-                if (tmpast / "textures" / "pokemon").exists():
-                    val.textures = tmpast / "textures" / "pokemon"
+                if (x := (tmpast / "lang")).exists():
+                    val.lang = x
+                if (x := (tmpast / "textures" / "pokemon")).exists():
+                    val.textures = x
+                if (x := (tmpast / "sounds")).exists():
+                    val.sounds.add(x)
+                if (x := (tmpast / "sounds.json")).exists():
+                    val.sound_jsons.add(x)
 
         for data_candidate in [
             "data/cobblemon",
             "data",
         ]:
-            data_flag = False
             if (temp_data := self.folder_location / data_candidate).exists():
                 for candidate in temp_data.iterdir():
                     if candidate.is_dir():
@@ -826,21 +831,18 @@ class Pack:
                             or ((candidate / "species_features").exists())
                             or ((candidate / "species_feature_assignments").exists())
                         ):
-                            temp_data = candidate
-                            data_flag = True
-                            break
-
-            if data_flag:
-                if (x := temp_data / "spawn_pool_world").exists():
-                    val.spawn_pool_world = x
-                if (x := temp_data / "species").exists():
-                    val.species = x
-                if (x := temp_data / "species_additions").exists():
-                    val.species_additions = x
-                if (x := temp_data / "species_features").exists():
-                    val.species_features = x
-                if (x := temp_data / "species_feature_assignments").exists():
-                    val.species_features_assignments = x
+                            if (x := candidate / "spawn_pool_world").exists():
+                                val.spawn_pool_world = x
+                            if (x := candidate / "species").exists():
+                                val.species = x
+                            if (x := candidate / "species_additions").exists():
+                                val.species_additions = x
+                            if (x := candidate / "species_features").exists():
+                                val.species_features = x
+                            if (
+                                x := candidate / "species_feature_assignments"
+                            ).exists():
+                                val.species_features_assignments = x
 
         self.component_location = val
 
@@ -1229,12 +1231,6 @@ class Pack:
                                     aspect = selected.replace("{{choice}}", feat_choice)
                         else:
                             aspect = feat_parts[0]
-
-                        # for form in self.pokemon[pok_name].forms.values():
-                        #     if aspect in form.aspects:
-                        #         form.spawn_pool.append(in_spawn_file)
-                        #         form.spawn_pool = list(set(form.spawn_pool))
-                        #         flag = True
 
                     if aspect:  # if you found an aspect, match it or create
                         flag = False
