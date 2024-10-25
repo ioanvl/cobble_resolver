@@ -1,6 +1,7 @@
 import os
 import sys
 
+clear_line = f"\033[A\r{' '*60}\r"
 special_keys = {
     "\r": "enter",
     "\t": "tab",

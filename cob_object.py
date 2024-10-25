@@ -8,13 +8,14 @@ from json import JSONDecodeError
 import zipfile
 import shutil
 from cli_utils import positive_int_choice
+from c_decorators import safe_parse_per_file
+from cli_utils import clear_line
 
 DEBUG = False
 
 square_f = "\u25a3"
 square_e = "\u25a1"
 check_mark = "\u2713"
-clear_line = f"\033[A\r{' '*60}\r"
 
 default_animation_types: list[str] = [
     "ground_idle",
@@ -681,7 +682,7 @@ class Pack:
     def _move_leftovers(self, export_path: Path) -> None:
         if len([i for i in self.folder_location.rglob("*") if i.is_dir()]):
             shutil.make_archive(
-                f"[ce]_{str((export_path / self.name))}",
+                f"{str((export_path / f"[ce]_{self.name}"))}",
                 format="zip",
                 root_dir=str(self.folder_location),
             )
@@ -995,58 +996,32 @@ class Pack:
 
     # ------------------------------------------------------------
 
-    def _get_data_species(self) -> None:  # STEP 1
+    @safe_parse_per_file(component_attr="species", DEBUG=DEBUG)
+    def _get_data_species(self, t: Path, data: dict) -> None:  # STEP 1
         """parse through species files"""
-        if (self.component_location is None) or (
-            self.component_location.species is None
-        ):
-            if self.verbose:
-                print("-- No Species")
-            return
-        print("-- Parsing Species")
-
-        for t in self.component_location.species.rglob("*.json"):
-            try:
-                try:
-                    with t.open() as f:
-                        data = json.load(f)
-                except (UnicodeDecodeError, JSONDecodeError) as _:
-                    if DEBUG:
-                        print(f"WARN!! - {t}")
-                        _ = input()
-                    continue
-                pok = Pokemon(
-                    internal_name=t.stem,
-                    name=data["name"],
-                    dex_id=data.get("nationalPokedexNumber", -1),
-                    features=data.get("features", list()),
-                    forms={
-                        "base_form": PokemonForm(
-                            name="base_form",
-                            aspects=(data.get("aspects", list())),
-                            species=bcfo(file_path=t, source=data),
-                        )
-                    },
+        pok = Pokemon(
+            internal_name=t.stem,
+            name=data["name"],
+            dex_id=data.get("nationalPokedexNumber", -1),
+            features=data.get("features", list()),
+            forms={
+                "base_form": PokemonForm(
+                    name="base_form",
+                    aspects=(data.get("aspects", list())),
+                    species=bcfo(file_path=t, source=data),
                 )
+            },
+        )
 
-                forms: list = data.get("forms", list())
-                for i_form in forms:
-                    pok.forms[(str(i_form["name"])).lower()] = PokemonForm(
-                        name=i_form["name"],
-                        aspects=(i_form.get("aspects", list())),
-                        species=bcfo(file_path=t, source=i_form),
-                    )
-                self.pokemon[pok.internal_name] = pok
-                self._register_evolutions(
-                    data=data, name=pok.internal_name, file_path=t
-                )
-
-            except Exception as e:
-                print(f"\n\n{t}\n\n")
-                raise e
-
-        if not self.verbose:
-            print(clear_line, end="")
+        forms: list = data.get("forms", list())
+        for i_form in forms:
+            pok.forms[(str(i_form["name"])).lower()] = PokemonForm(
+                name=i_form["name"],
+                aspects=(i_form.get("aspects", list())),
+                species=bcfo(file_path=t, source=i_form),
+            )
+        self.pokemon[pok.internal_name] = pok
+        self._register_evolutions(data=data, name=pok.internal_name, file_path=t)
 
     def _register_evolutions(
         self, data: dict, name: str, file_path: Path, is_addition: bool = False
