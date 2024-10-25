@@ -478,11 +478,11 @@ class PackLocations:
 
     lang: Path | None = None
 
-    species: Path | None = None
-    species_additions: Path | None = None
-    spawn_pool_world: Path | None = None
-    species_features: Path | None = None
-    species_features_assignments: Path | None = None
+    species: set[Path] = field(default_factory=set)
+    species_additions: set[Path] = field(default_factory=set)
+    spawn_pool_world: set[Path] = field(default_factory=set)
+    species_features: set[Path] = field(default_factory=set)
+    species_features_assignments: set[Path] = field(default_factory=set)
 
     posers_dict: dict[str, Path] = field(default_factory=dict)
     models_dict: dict[str, Path] = field(default_factory=dict)
@@ -512,22 +512,17 @@ class PackLocations:
             or bool(self.posers)
             or (self.textures is not None)
             or (self.lang is not None)
-            or (self.species is not None)
-            or (self.species_additions is not None)
-            or (self.spawn_pool_world is not None)
-            or (self.species_features is not None)
-            or (self.species_features_assignments is not None)
+            or bool(self.species)
+            or bool(self.species_additions)
+            or bool(self.spawn_pool_world)
+            or bool(self.species_features)
+            or bool(self.species_features_assignments)
         )
 
     def _delete_registered_paths(self) -> None:
         for x in [
             self.lang,
             self.textures,
-            self.species,
-            self.species_additions,
-            self.spawn_pool_world,
-            self.species_features,
-            self.species_features_assignments,
         ]:
             if x and x.exists() and x.is_dir():
                 shutil.rmtree(x)
@@ -536,6 +531,11 @@ class PackLocations:
             self.models,  #
             self.posers,  #
             self.resolvers,  #
+            self.species,
+            self.species_additions,
+            self.spawn_pool_world,
+            self.species_features,
+            self.species_features_assignments,
         ]:
             for x in y:
                 if x and x.exists() and x.is_dir():
@@ -831,25 +831,16 @@ class Pack:
             if (temp_data := self.folder_location / data_candidate).exists():
                 for candidate in temp_data.iterdir():
                     if candidate.is_dir():
-                        if (
-                            ((candidate / "spawn_pool_world").exists())
-                            or ((candidate / "species").exists())
-                            or ((candidate / "species_additions").exists())
-                            or ((candidate / "species_features").exists())
-                            or ((candidate / "species_feature_assignments").exists())
-                        ):
-                            if (x := candidate / "spawn_pool_world").exists():
-                                val.spawn_pool_world = x
-                            if (x := candidate / "species").exists():
-                                val.species = x
-                            if (x := candidate / "species_additions").exists():
-                                val.species_additions = x
-                            if (x := candidate / "species_features").exists():
-                                val.species_features = x
-                            if (
-                                x := candidate / "species_feature_assignments"
-                            ).exists():
-                                val.species_features_assignments = x
+                        if (x := candidate / "spawn_pool_world").exists():
+                            val.spawn_pool_world.add(x)
+                        if (x := candidate / "species").exists():
+                            val.species.add(x)
+                        if (x := candidate / "species_additions").exists():
+                            val.species_additions.add(x)
+                        if (x := candidate / "species_features").exists():
+                            val.species_features.add(x)
+                        if (x := candidate / "species_feature_assignments").exists():
+                            val.species_features_assignments.add(x)
 
         self.component_location = val
 
@@ -871,67 +862,32 @@ class Pack:
             print(f"[{check_mark}] {self.name}")
 
     # ------------------------------------------------------------
+    @safe_parse_per_file(component_attr="features", DEBUG=DEBUG)
+    def _get_features(self, input_file_path: Path, data: dict) -> None:  # STEP 0
+        self.features[input_file_path.stem] = Feature(
+            name=input_file_path.stem,
+            keys=data.get("keys", list()),
+            feat_type=FeatureType(data.get("type", "flag")),
+            aspect=data.get("isAspect", False),
+            file_path=input_file_path,
+            source=data,
+        )
 
-    def _get_features(self) -> None:  # STEP 0
-        if (self.component_location is None) or (
-            self.component_location.species_features is None
-        ):
-            if self.verbose:
-                print("-- No Features")
-            return
-        print("-- Parsing Features")
-
-        for t in self.component_location.species_features.iterdir():
-            if t.suffix == ".json":
-                with t.open() as f:
-                    data = json.load(f)
-                self.features[t.stem] = Feature(
-                    name=t.stem,
-                    keys=data.get("keys", list()),
-                    feat_type=FeatureType(data.get("type", "flag")),
-                    aspect=data.get("isAspect", False),
-                    file_path=t,
-                    source=data,
-                )
-
-        if not self.verbose:
-            print(clear_line, end="")
-
-    def _get_feature_assignments(self) -> None:  # STEP 0b #TODO?
-        if (self.component_location is None) or (
-            self.component_location.species_features_assignments is None
-        ):
-            if self.verbose:
-                print("-- No Feature Assignments")
-            return
-        print("-- Parsing Feature Assignments")
-
-        for t in self.component_location.species_features_assignments.rglob("*.json"):
-            try:
-                try:
-                    with t.open() as f:
-                        data = json.load(f)
-                except UnicodeDecodeError as _:
-                    continue
-
-                self.feature_assignments.append(
-                    FeatureAssignment(
-                        file_path=t,
-                        source=data,
-                        name=t.stem,
-                        incl_pokemon=data.get("pokemon", list()),
-                    )
-                )
-
-                # ---------------
-                # process?
-                # ---------------
-
-            except Exception as e:
-                print(f"\n\n{t}\n\n")
-                raise e
-        if not self.verbose:
-            print(clear_line, end="")
+    @safe_parse_per_file(component_attr="species_features_assignments", DEBUG=DEBUG)
+    def _get_feature_assignments(
+        self, input_file_path: Path, data: dict
+    ) -> None:  # STEP 0b #TODO?
+        self.feature_assignments.append(
+            FeatureAssignment(
+                file_path=input_file_path,
+                source=data,
+                name=input_file_path.stem,
+                incl_pokemon=data.get("pokemon", list()),
+            )
+        )
+        # ---------------
+        # process?
+        # ---------------
 
     # ------------------------------------------------------------
 
@@ -949,7 +905,7 @@ class Pack:
         self._get_data_spawn()
 
     def _get_looks(self) -> None:
-        self._get_looks_resolvers()
+        self._get_looks_files()
 
         self._get_looks_animations()
         self._update_defined_animation_types()
@@ -1052,205 +1008,145 @@ class Pack:
                 is_addition=is_addition,
             )
 
-    def _get_data_species_additions(self) -> None:  # STEP 1b
-        if (self.component_location is None) or (
-            self.component_location.species_additions is None
-        ):
-            if self.verbose:
-                print("-- No Species Additions")
-            return
-        print("-- Parsing Species Additions")
+    @safe_parse_per_file(component_attr="species_additions", DEBUG=DEBUG)
+    def _get_data_species_additions(
+        self, input_file_path: Path, data: dict
+    ) -> None:  # STEP 1b
+        target_parts: str = (str(data["target"])).split(":")
+        if len(target_parts) > 1:
+            target = target_parts[1]
+        else:
+            target = target_parts[0]
 
-        for t in self.component_location.species_additions.rglob("*.json"):
-            try:
-                try:
-                    with t.open() as f:
-                        data = json.load(f)
-                except (UnicodeDecodeError, JSONDecodeError) as _:
-                    if DEBUG:
-                        print(f"WARN!! - {t}")
-                        _ = input()
-                    continue
-
-                # ---------------
-                target_parts: str = (str(data["target"])).split(":")
-                if len(target_parts) > 1:
-                    target = target_parts[1]
-                else:
-                    target = target_parts[0]
-
-                if target not in self.pokemon:
-                    self.pokemon[target] = Pokemon(
-                        internal_name=target,
-                        dex_id=data.get("nationalPokedexNumber", -1),
-                        features=data.get("features", list()),
-                        forms={
-                            "base_form": PokemonForm(
-                                name="base_form",
-                                aspects=data.get("aspects", list()),
-                                species_additions=bcfo(file_path=t, source=data),
-                            )
-                        },
+        if target not in self.pokemon:
+            self.pokemon[target] = Pokemon(
+                internal_name=target,
+                dex_id=data.get("nationalPokedexNumber", -1),
+                features=data.get("features", list()),
+                forms={
+                    "base_form": PokemonForm(
+                        name="base_form",
+                        aspects=data.get("aspects", list()),
+                        species_additions=bcfo(file_path=input_file_path, source=data),
                     )
-                else:
-                    self.pokemon[target].features.extend(data.get("features", list()))
-                    self.pokemon[target].forms["base_form"].species_additions = bcfo(
-                        file_path=t, source=data
-                    )
-                    self.pokemon[target].forms["base_form"].aspects.extend(
-                        data.get("aspects", list())
-                    )
+                },
+            )
+        else:
+            self.pokemon[target].features.extend(data.get("features", list()))
+            self.pokemon[target].forms["base_form"].species_additions = bcfo(
+                file_path=input_file_path, source=data
+            )
+            self.pokemon[target].forms["base_form"].aspects.extend(
+                data.get("aspects", list())
+            )
 
-                forms: list = data.get("forms", list())
-                for i_form in forms:
-                    form_name = (str(i_form["name"])).lower()
-                    if form_name not in self.pokemon[target].forms:
-                        self.pokemon[target].forms[form_name] = PokemonForm(
-                            name=form_name,
-                            aspects=i_form.get("aspects", list()),
-                            species_additions=bcfo(file_path=t, source=i_form),
-                        )
-                    else:
-                        self.pokemon[target].forms[form_name].species_additions = bcfo(
-                            file_path=t, source=i_form
-                        )
-                        self.pokemon[target].forms[form_name].aspects.extend(
-                            i_form.get("aspects", list())
-                        )
-
-                self._register_evolutions(
-                    data=data, name=target, file_path=t, is_addition=True
+        forms: list = data.get("forms", list())
+        for i_form in forms:
+            form_name = (str(i_form["name"])).lower()
+            if form_name not in self.pokemon[target].forms:
+                self.pokemon[target].forms[form_name] = PokemonForm(
+                    name=form_name,
+                    aspects=i_form.get("aspects", list()),
+                    species_additions=bcfo(file_path=input_file_path, source=i_form),
+                )
+            else:
+                self.pokemon[target].forms[form_name].species_additions = bcfo(
+                    file_path=input_file_path, source=i_form
+                )
+                self.pokemon[target].forms[form_name].aspects.extend(
+                    i_form.get("aspects", list())
                 )
 
-                # ---------------
+        self._register_evolutions(
+            data=data, name=target, file_path=input_file_path, is_addition=True
+        )
 
-            except Exception as e:
-                print(f"\n\n{t}\n\n")
-                raise e
-        if not self.verbose:
-            print(clear_line, end="")
+    @safe_parse_per_file(component_attr="spawn_pool_world", DEBUG=DEBUG)
+    def _get_data_spawn(self, input_file_path: Path, data: dict) -> None:  # STEP 1c
+        spawns = data.get("spawns", list())
 
-    def _get_data_spawn(self) -> None:  # STEP 1c
-        if (self.component_location is None) or (
-            self.component_location.spawn_pool_world is None
-        ):
-            if self.verbose:
-                print("-- No Spawn Data")
-            return
-        print("-- Parsing Spawn Data")
+        for spawn_entry in spawns:
+            pok: str = spawn_entry["pokemon"]
+            pok_parts: list[str] = pok.split(" ")
+            pok_name: str = pok_parts[0]
 
-        for in_spawn_file in self.component_location.spawn_pool_world.rglob("*.json"):
-            try:
-                try:
-                    with in_spawn_file.open() as f:
-                        data = json.load(f)
-                except (UnicodeDecodeError, JSONDecodeError) as _:
-                    if DEBUG:
-                        print(f"WARN!! - {in_spawn_file}")
-                        _ = input()
-                    continue
+            if pok_name not in self.pokemon:
+                if DEBUG:
+                    print(f"WARN!! - {pok_name}, not found")
+                    _ = input()
+                self.pokemon[pok_name] = Pokemon(
+                    internal_name=pok_name,
+                    dex_id=-1,
+                    forms={"base_form": PokemonForm(name="base_form")},
+                )
 
-                # ---------------
-                spawns = data.get("spawns", list())
+            aspect = ""
+            if len(pok_parts) > 1:  # try to find an aspect
+                feat_parts: list[str] = pok_parts[1].split("=")
 
-                for spawn_entry in spawns:
-                    pok: str = spawn_entry["pokemon"]
-                    pok_parts: list[str] = pok.split(" ")
-                    pok_name: str = pok_parts[0]
+                if len(feat_parts) > 1:  # choice
+                    feat_name: str = feat_parts[0]
+                    feat_choice: str = feat_parts[1]
 
-                    if pok_name not in self.pokemon:
-                        if DEBUG:
-                            print(f"WARN!! - {pok_name}, not found")
-                            _ = input()
-                        self.pokemon[pok_name] = Pokemon(
-                            internal_name=pok_name,
-                            dex_id=-1,
-                            forms={"base_form": PokemonForm(name="base_form")},
-                        )
-
-                    aspect = ""
-                    if len(pok_parts) > 1:  # try to find an aspect
-                        feat_parts: list[str] = pok_parts[1].split("=")
-
-                        if len(feat_parts) > 1:  # choice
-                            feat_name: str = feat_parts[0]
-                            feat_choice: str = feat_parts[1]
-
-                            if feat_choice.lower() in [
-                                "true",
-                                "false",
-                            ]:  # fix for some dumb stuff
-                                if feat_choice.lower() == "true":
-                                    aspect = feat_parts[0]
-                            elif feat_name.lower() == "form":  # fix other dumb stuff
-                                if feat_choice.lower() in self.pokemon[pok_name].forms:
-                                    self.pokemon[pok_name].forms[
-                                        feat_choice.lower()
-                                    ].spawn_pool.append(in_spawn_file)
-                                    self.pokemon[pok_name].forms[
-                                        feat_choice.lower()
-                                    ].spawn_pool = list(
-                                        set(
-                                            self.pokemon[pok_name]
-                                            .forms[feat_choice.lower()]
-                                            .spawn_pool
-                                        )
-                                    )
-                                    continue
-                            else:
-                                selected = ""
-                                if feat_name in self.features:
-                                    selected = self.features[feat_name].source[
-                                        "aspectFormat"
-                                    ]
-                                else:
-                                    for val in self.features.values():
-                                        if feat_name in val.keys:
-                                            selected = val.source["aspectFormat"]
-                                            break
-                                if selected:
-                                    aspect = selected.replace("{{choice}}", feat_choice)
-                        else:
+                    if feat_choice.lower() in [
+                        "true",
+                        "false",
+                    ]:  # fix for some dumb stuff
+                        if feat_choice.lower() == "true":
                             aspect = feat_parts[0]
+                    elif feat_name.lower() == "form":  # fix other dumb stuff
+                        if feat_choice.lower() in self.pokemon[pok_name].forms:
+                            self.pokemon[pok_name].forms[
+                                feat_choice.lower()
+                            ].spawn_pool.append(input_file_path)
+                            self.pokemon[pok_name].forms[
+                                feat_choice.lower()
+                            ].spawn_pool = list(
+                                set(
+                                    self.pokemon[pok_name]
+                                    .forms[feat_choice.lower()]
+                                    .spawn_pool
+                                )
+                            )
+                            continue
+                    else:
+                        selected = ""
+                        if feat_name in self.features:
+                            selected = self.features[feat_name].source["aspectFormat"]
+                        else:
+                            for val in self.features.values():
+                                if feat_name in val.keys:
+                                    selected = val.source["aspectFormat"]
+                                    break
+                        if selected:
+                            aspect = selected.replace("{{choice}}", feat_choice)
+                else:
+                    aspect = feat_parts[0]
 
-                    if aspect:  # if you found an aspect, match it or create
-                        flag = False
-                        for form in self.pokemon[pok_name].forms.values():
-                            if aspect in form.aspects:
-                                form.spawn_pool.append(in_spawn_file)
-                                form.spawn_pool = list(set(form.spawn_pool))
-                                flag = True
-                        if not flag:
-                            new_form = PokemonForm(name=f"--{aspect}")
-                            new_form.spawn_pool.append(in_spawn_file)
-                            self.pokemon[pok_name].forms[new_form.name] = new_form
+            if aspect:  # if you found an aspect, match it or create
+                flag = False
+                for form in self.pokemon[pok_name].forms.values():
+                    if aspect in form.aspects:
+                        form.spawn_pool.append(input_file_path)
+                        form.spawn_pool = list(set(form.spawn_pool))
+                        flag = True
+                if not flag:
+                    new_form = PokemonForm(name=f"--{aspect}")
+                    new_form.spawn_pool.append(input_file_path)
+                    self.pokemon[pok_name].forms[new_form.name] = new_form
 
-                    else:  # else add to primary
-                        self.pokemon[pok_name].forms["base_form"].spawn_pool.append(
-                            in_spawn_file
-                        )
-                        self.pokemon[pok_name].forms["base_form"].spawn_pool = list(
-                            set(self.pokemon[pok_name].forms["base_form"].spawn_pool)
-                        )
-
-                # ---------------
-
-            except Exception as e:
-                print(f"\n\n{in_spawn_file}\n\n")
-                raise e
-        if not self.verbose:
-            print(clear_line, end="")
+            else:  # else add to primary
+                self.pokemon[pok_name].forms["base_form"].spawn_pool.append(
+                    input_file_path
+                )
+                self.pokemon[pok_name].forms["base_form"].spawn_pool = list(
+                    set(self.pokemon[pok_name].forms["base_form"].spawn_pool)
+                )
 
     # ------------------------------------------------------------
 
-    def _get_looks_resolvers(self) -> None:  # STEP 2
+    def _get_looks_files(self) -> None:  # STEP 2
         """STEP 2 - parse through resolvers"""
-        if (self.component_location is None) or (not self.component_location.resolvers):
-            if self.verbose:
-                print("-- No Resolver Data")
-            return
-        print("-- Parsing Resolver Data")
-
         for t_set in self.component_location.posers:
             for t in t_set.rglob("*.json"):
                 self.component_location.posers_dict[t.stem] = t
@@ -1263,73 +1159,51 @@ class Pack:
             for t in self.component_location.textures.rglob("*.png"):
                 self.component_location.textures_dict[t.stem] = t
 
-        for t_set in self.component_location.resolvers:
-            for t in t_set.rglob("*.json"):
-                try:
-                    try:
-                        with t.open() as f:
-                            data = json.load(f)
-                    except (UnicodeDecodeError, JSONDecodeError) as _:
-                        if DEBUG:
-                            print(f"WARN!! - {t}")
-                            _ = input()
-                        continue
+        self._get_looks_resolvers()
 
-                    # ---------------
-                    pok_name: str = str(data["species"]).split(":")[-1]
+    @safe_parse_per_file(component_attr="resolvers", DEBUG=DEBUG)
+    def _get_looks_resolvers(self, input_file_path: Path, data: dict) -> None:
+        pok_name: str = str(data["species"]).split(":")[-1]
 
-                    if pok_name not in self.pokemon:
-                        self.pokemon[pok_name] = Pokemon(
-                            internal_name=pok_name,
-                            dex_id=-1,
-                            forms={"base_form": PokemonForm(name="base_form")},
-                        )
+        if pok_name not in self.pokemon:
+            self.pokemon[pok_name] = Pokemon(
+                internal_name=pok_name,
+                dex_id=-1,
+                forms={"base_form": PokemonForm(name="base_form")},
+            )
 
-                    order = data.get("order", -1)
-                    if order in list(self.pokemon[pok_name].resolvers.keys()):
-                        # if for some reason theres a duplicate key, give it a new negative one
-                        order = (
-                            min(min(list(self.pokemon[pok_name].resolvers.keys())), 0)
-                            - 1
-                        )
+        order = data.get("order", -1)
+        if order in list(self.pokemon[pok_name].resolvers.keys()):
+            # if for some reason theres a duplicate key, give it a new negative one
+            order = min(min(list(self.pokemon[pok_name].resolvers.keys())), 0) - 1
 
-                    new_resolver_entry = ResolverEntry(order=order, own_path=t)
-                    aspects: list[str] = list()
-                    # ----- parsing through variations
-                    for v in data.get("variations", list()):
-                        new_resolver_entry = self._resolve_variation_or_layer(
-                            entry=v, existing_resolver=new_resolver_entry
-                        )
-                        v_aspects = v.get("aspects", list())
-                        aspects.extend(v_aspects)
+        new_resolver_entry = ResolverEntry(order=order, own_path=input_file_path)
+        aspects: list[str] = list()
+        # ----- parsing through variations
+        for v in data.get("variations", list()):
+            new_resolver_entry = self._resolve_variation_or_layer(
+                entry=v, existing_resolver=new_resolver_entry
+            )
+            v_aspects = v.get("aspects", list())
+            aspects.extend(v_aspects)
 
-                    # ----- assignemt to correct subforms
-                    aspects = list(set(aspects))
+        # ----- assignemt to correct subforms
+        aspects = list(set(aspects))
 
-                    if "shiny" in aspects:
-                        new_resolver_entry.has_shiny = True
-                        aspects.remove("shiny")
+        if "shiny" in aspects:
+            new_resolver_entry.has_shiny = True
+            aspects.remove("shiny")
 
-                    flag = False
-                    for asp in aspects:
-                        for form in self.pokemon[pok_name].forms.values():
-                            if asp in form.aspects:
-                                form.resolver_assignments.add(order)
-                                flag = True
-                    if not flag:
-                        self.pokemon[pok_name].forms[
-                            "base_form"
-                        ].resolver_assignments.add(order)
+        flag = False
+        for asp in aspects:
+            for form in self.pokemon[pok_name].forms.values():
+                if asp in form.aspects:
+                    form.resolver_assignments.add(order)
+                    flag = True
+        if not flag:
+            self.pokemon[pok_name].forms["base_form"].resolver_assignments.add(order)
 
-                    self.pokemon[pok_name].resolvers[order] = new_resolver_entry
-
-                    # ---------------
-
-                except Exception as e:
-                    print(f"\n\n{t}\n\n")
-                    raise e
-        if not self.verbose:
-            print(clear_line, end="")
+        self.pokemon[pok_name].resolvers[order] = new_resolver_entry
 
     def _resolve_variation_or_layer(
         self, entry: dict, existing_resolver: ResolverEntry
@@ -1400,55 +1274,29 @@ class Pack:
 
     # ------------------------------------------------------------
 
-    def _get_looks_animations(self) -> None:  # STEP 3
-        if (self.component_location is None) or (
-            not self.component_location.animations
-        ):
-            if self.verbose:
-                print("-- No Animations")
+    @safe_parse_per_file(component_attr="animations", DEBUG=DEBUG)
+    def _get_looks_animations(
+        self, input_file_path: Path, data: dict
+    ) -> None:  # STEP 3
+        anims = data.get("animations", dict())
+        if not isinstance(anims, dict):
             return
-        print("-- Parsing Animations")
 
-        for t_e in self.component_location.animations:
-            for t in t_e.rglob("*.json"):
-                try:
-                    try:
-                        with t.open() as f:
-                            data = json.load(f)
-                    except (UnicodeDecodeError, JSONDecodeError) as _:
-                        if DEBUG:
-                            print(f"WARN!! - {t}")
-                            _ = input()
-                        continue
+        for key in anims.keys():
+            key_parts: list[str] = str(key).split(".")
+            if len(key_parts) == 1:
+                # no animation group, e.g. pikachu's "education"
+                name = "__null__"
+                move = key_parts[0]
+            else:
+                name = key_parts[1]
+                move = key_parts[2]
 
-                    # ---------------
-                    anims = data.get("animations", dict())
-                    if not isinstance(anims, dict):
-                        continue
-
-                    for key in anims.keys():
-                        key_parts: list[str] = str(key).split(".")
-                        if len(key_parts) == 1:
-                            # no animation group, e.g. pikachu's "education"
-                            name = "__null__"
-                            move = key_parts[0]
-                        else:
-                            name = key_parts[1]
-                            move = key_parts[2]
-
-                        if name not in self.present_animations:
-                            self.present_animations[name] = dict()
-                        if move not in self.present_animations[name]:
-                            self.present_animations[name][move] = set()
-                        self.present_animations[name][move].add(t)
-
-                    # ---------------
-
-                except Exception as e:
-                    print(f"\n\n{t}\n\n")
-                    raise e
-        if not self.verbose:
-            print(clear_line, end="")
+            if name not in self.present_animations:
+                self.present_animations[name] = dict()
+            if move not in self.present_animations[name]:
+                self.present_animations[name][move] = set()
+            self.present_animations[name][move].add(input_file_path)
 
     def _update_defined_animation_types(self) -> None:  # STEP 3b
         self.defined_animation_types.update(default_animation_types)
