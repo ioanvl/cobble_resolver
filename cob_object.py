@@ -56,7 +56,9 @@ def clear_empty_dir(
                 item.unlink()
 
         if item.is_dir():
-            clear_empty_dir(s_path=item, verbose=verbose)
+            clear_empty_dir(
+                s_path=item, verbose=verbose, items_to_delete=items_to_delete
+            )
             if not len([x for x in item.rglob("*")]):
                 item.rmdir()
 
@@ -223,7 +225,6 @@ class EvolutionCollection:
         self.evolutions.remove(ev)
 
 
-# TODO multiple sources on each location
 # TODO sounds
 # TODO pokedex fix
 
@@ -617,12 +618,16 @@ class Pack:
             for pok in self.pokemon.values():
                 if pok.selected or (not selected):
                     path_set.update(pok.get_all_export_paths())
-                else:
-                    delete_set.update(pok.get_all_export_paths())
+                # else:
+                #     delete_set.update(pok.get_all_export_paths())
+
             # for fa in self.feature_assignments:  #TODO....maybe?
             #     path_set.add(fa.file_path)
 
-        delete_set = delete_set.difference(path_set)
+        # delete_set = delete_set.difference(path_set)
+
+        delete_set = _overall_set.difference(path_set)
+
         c = 0
         for p in path_set:
             if p:
@@ -644,7 +649,14 @@ class Pack:
 
             self.component_location._delete_registered_paths()
             clear_empty_dir(
-                s_path=self.folder_location, items_to_delete=["_MACOSX", ".DS_Store"]
+                s_path=self.folder_location,
+                items_to_delete=[
+                    "__MACOSX",
+                    ".DS_Store",
+                    "desktop.ini",
+                    "READ ME.txt",
+                    "README.txt",
+                ],
             )
             del_flag = True
         except PermissionError:
@@ -658,14 +670,7 @@ class Pack:
         #         p.unlink()
 
         if isinstance(move_leftovers, Path) and del_flag:
-            if len(
-                [
-                    i
-                    for i in self.folder_location.rglob("*")
-                    if not str(i).endswith(("pack.mcmeta", "pack.png"))
-                ]
-            ):
-                self._move_leftovers(export_path=move_leftovers)
+            self._move_leftovers(export_path=move_leftovers)
 
         outp = f"{c} files moved "
         if d := (len(path_set) - c):
@@ -674,11 +679,12 @@ class Pack:
         print(outp)
 
     def _move_leftovers(self, export_path: Path) -> None:
-        shutil.make_archive(
-            f"{str((export_path / self.name))} - CORE_Edit",
-            format="zip",
-            root_dir=str(self.folder_location),
-        )
+        if len([i for i in self.folder_location.rglob("*") if i.is_dir()]):
+            shutil.make_archive(
+                f"[ce]_{str((export_path / self.name))}",
+                format="zip",
+                root_dir=str(self.folder_location),
+            )
 
     def _export_langs(self, export_path: Path) -> None:
         langs = self._get_lang_export()
@@ -1655,6 +1661,14 @@ class Pack:
 
     # ------------------------------------------------------------
 
+    def _get_sounds(self):
+        pass
+
+    def _get_sound_files(self):
+        pass
+
+    # ------------------------------------------------------------
+
     def _assign_evo_score(self):
         for entry in self.registered_evolutions.evolutions:
             if (x := self._cleanup_evo_name(entry.to_pokemon)) in self.pokemon:
@@ -2003,7 +2017,9 @@ class Combiner:
             return (selected_key, "A")
         return (None, None)
 
-    def _dual_choice(self, holder: dict[str, Pokemon]):
+    def _dual_choice(
+        self, holder: dict[str, Pokemon]
+    ) -> tuple[str, str] | tuple[None, None]:
         if len(holder) == 2:
             if "BASE" in holder:
                 pack, stype = self._dual_choice_against_base(holder=holder)
@@ -2019,7 +2035,9 @@ class Combiner:
                     return (pack, stype)
         return (None, None)
 
-    def _dual_choice_against_base(self, holder: dict[str, Pokemon]):
+    def _dual_choice_against_base(
+        self, holder: dict[str, Pokemon]
+    ) -> tuple[Literal["R"], str] | tuple[None, None]:
         keys = list(holder.keys())
         keys.remove("BASE")
         other_key = keys[0]
@@ -2049,7 +2067,7 @@ class Combiner:
 
     def _dual_choice_against_base_add_spawn(
         self, holder: dict[str, Pokemon], other_key: str, mod_key: str = "BASE"
-    ):
+    ) -> tuple[str, Literal["R"]] | tuple[None, None]:
         fb = holder[mod_key].forms["base_form"]
         fo = holder[other_key].forms["base_form"]
 
@@ -2077,7 +2095,9 @@ class Combiner:
             return (list(holder.keys())[0], "I")
         return (None, None)
 
-    def _dual_choice_mod_and_pack(self, holder: dict[str, Pokemon]):
+    def _dual_choice_mod_and_pack(
+        self, holder: dict[str, Pokemon]
+    ) -> tuple[str, str] | tuple[None, None]:
         if (
             sum(
                 [
@@ -2087,12 +2107,12 @@ class Combiner:
             )
             == 1
         ):
-            fm = [
+            fm: PokemonForm = [
                 p
                 for p in holder.values()
                 if (p.parent_pack.is_base or p.parent_pack.is_mod)
             ][0].forms["base_form"]
-            fo = [
+            fo: PokemonForm = [
                 p
                 for p in holder.values()
                 if not (p.parent_pack.is_base or p.parent_pack.is_mod)
@@ -2143,7 +2163,7 @@ class Combiner:
 
     def _dual_choice_mod_w_g_and_spawn(
         self, pok_mod: PokemonForm, pok_other: PokemonForm
-    ) -> tuple[str, Literal["G3-R"]] | tuple[None, None]:
+    ) -> tuple[str, Literal["G4-R"]] | tuple[None, None]:
         if self._allow_risky_rules:
             if (
                 (
@@ -2169,7 +2189,7 @@ class Combiner:
 
     def _dual_choice_mod_and_req_pack_2(
         self, pok_mod: PokemonForm, pok_other: PokemonForm
-    ) -> tuple[str, Literal["G5-R"]] | tuple[None, None]:
+    ) -> tuple[str, Literal["G5b-R"]] | tuple[None, None]:
         if self._allow_risky_rules:
             if pok_mod.is_complete() and (
                 (pok_other.has_graphics())
@@ -2177,17 +2197,17 @@ class Combiner:
                 and pok_other.has_spawn()
                 and (not pok_other.has_sp_data())
             ):
-                return (pok_other.parent_pack.name, "G5_2-R")
+                return (pok_other.parent_pack.name, "G5b-R")
         return (None, None)
 
     def _dual_choice_mod_remodel(
         self, pok_mod: PokemonForm, pok_other: PokemonForm
-    ) -> tuple[str, Literal["G5-R"]] | tuple[None, None]:
+    ) -> tuple[str, Literal["G5c-R"]] | tuple[None, None]:
         if pok_mod.is_complete() and (
             (not pok_other.has_spawn())
             and (not pok_other.has_sp_data() and pok_other.is_graphically_complete())
         ):
-            return (pok_other.parent_pack.name, "G5-R")
+            return (pok_other.parent_pack.name, "G5c-R")
         return (None, None)
 
     def _dual_choice_card(
