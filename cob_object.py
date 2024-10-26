@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from tkinter import filedialog
-from typing import Any, Iterable, Literal, LiteralString, Optional
+from typing import Any, Generator, Iterable, Literal, LiteralString, Optional
 import json
 from json import JSONDecodeError
 import zipfile
@@ -16,6 +16,9 @@ DEBUG = False
 square_f = "\u25a3"
 square_e = "\u25a1"
 check_mark = "\u2713"
+left_arrow = "\u2190"
+x_symbol = "\u0078"
+music_symbol = "\u266a"
 
 default_animation_types: list[str] = [
     "ground_idle",
@@ -88,6 +91,130 @@ class Feature(bcfo):
 
     def __repr__(self) -> str:
         return f"{str(self.feat_type.name)[0:2]} - {self.name}"
+
+
+@dataclass
+class SoundEntry:
+    internal_name: str
+    moves: dict[str, set[Path]] = field(default_factory=dict)
+    _unassigned_files: set[Path] = field(default_factory=set)
+    data: dict[str, dict] = field(default_factory=dict)
+
+    def get_all_files(self) -> set[Path]:
+        res: set[Path] = set()
+        res.update(self._unassigned_files)
+        for m in self.moves.values():
+            res.update(m)
+        return res
+
+    def has_files(self) -> bool:
+        return bool(self._unassigned_files) or bool(self.moves)
+
+    def __contains__(self, item) -> bool:
+        return (item in self.get_all_files()) or (item in self.moves.keys())
+
+
+@dataclass
+class SoundPack:
+    assignment: bcfo | None = None
+    entries: dict[str, SoundEntry] = field(default_factory=dict)
+
+    _loose_files: set[Path] = field(default_factory=set)
+
+    _base_folder: Path | None = None
+    _parent_pack: Optional["Pack"] = None
+
+    def process(self) -> None:
+        self._process_assignment()
+        self._process_remaining_loose_files()
+
+    def _process_assignment(self) -> None:
+        if not self.assignment:
+            return
+        try:
+            with self.assignment.file_path.open() as f:
+                data: dict[str, dict] = json.load(f)
+        except:
+            return
+
+        for key in data.keys():
+            key_parts = key.split(".")
+
+            move_name = None
+            if len(key_parts) == 1:
+                pok_name = key_parts[0]
+            else:
+                if key_parts[0] != "pokemon":
+                    continue
+                pok_name = key_parts[1]
+                move_name = key_parts[2]
+
+            if pok_name not in self:
+                self.entries[pok_name] = SoundEntry(internal_name=pok_name)
+
+            se: SoundEntry = self.entries[pok_name]
+            if move_name:
+                if move_name not in se:
+                    se.moves[move_name] = set()
+
+            sounds_data_entry = data[key]
+            se.data[key] = sounds_data_entry
+
+            for s_file_e in sounds_data_entry.get("sounds", list()):
+                parts: list[str] = s_file_e.split("/")
+                if not parts[-1].endswith(".ogg"):
+                    parts[-1] = f"{parts[-1]}.ogg"
+
+                if (x := (self._base_folder / ("/".join(parts[1:])))).exists():
+                    if move_name:
+                        se.moves[move_name].add(x)
+                    else:
+                        se._unassigned_files.add(x)
+                    if x in self._loose_files:
+                        self._loose_files.remove(x)
+
+    def _process_remaining_loose_files(self) -> None:
+        lpcp = self._loose_files.copy()
+        for item in lpcp:
+            pok_name = (item.parent).name
+
+            parts = (item.stem).split("_")
+            if pok_name == "pokemon":
+                pok_name = parts[0]
+
+            move_name = ""
+            if len(parts) > 1:
+                move_name = parts[1]
+
+            if pok_name not in self:
+                self.entries[pok_name] = SoundEntry(internal_name=pok_name)
+
+            se: SoundEntry = self.entries[pok_name]
+            if move_name:
+                if move_name not in se:
+                    se.moves[move_name] = set()
+
+            if move_name:
+                se.moves[move_name].add(item)
+            else:
+                se._unassigned_files.add(item)
+            self._loose_files.remove(item)
+
+    def __contains__(self, pokemon: str) -> bool:
+        return pokemon in self.entries.keys()
+
+    def __iter__(self) -> Generator[SoundEntry, Any, None]:
+        for mon in self.entries.values():
+            yield mon
+
+    def get_all_files(self) -> set[Path]:
+        res: set[Path] = set()
+        if self.assignment:
+            res.add(self.assignment.file_path)
+        res.update(self._loose_files)
+        for en in self.entries.values():
+            res.update(en.get_all_files())
+        return res
 
 
 @dataclass
@@ -192,7 +319,9 @@ class EvolutionCollection:
     def get_evolutions(
         self, source: str | None = None, result: str | None = None
     ) -> list[EvolutionEntry]:
-        res: list[EvolutionEntry] = list()
+        res: list[EvolutionEntry] = (
+            list()
+        )  # TODO make it a set and add hashes to the entries
         if source:
             res.extend(
                 [
@@ -208,6 +337,34 @@ class EvolutionCollection:
             res.extend(
                 [
                     ev
+                    for ev in self.evolutions
+                    if (
+                        (ev.to_pokemon == result)
+                        or (ev.to_pokemon.startswith(f"{result}_"))
+                    )
+                ]
+            )
+        return res
+
+    def get_evolution_names(
+        self, source: str | None = None, result: str | None = None
+    ) -> set[str]:
+        res: set[str] = set()
+        if source:
+            res.update(
+                [
+                    ev.to_pokemon
+                    for ev in self.evolutions
+                    if (
+                        (ev.from_pokemon == source)
+                        or (ev.from_pokemon.startswith(f"{source}_"))
+                    )
+                ]
+            )
+        if result:
+            res.update(
+                [
+                    ev.from_pokemon
                     for ev in self.evolutions
                     if (
                         (ev.to_pokemon == result)
@@ -262,6 +419,7 @@ class PokemonForm:
         ret += f"/{self.__square_atr(self.species_additions)}:SA "
 
         if self.name == "base_form" and (self.parent_pokemon is not None):
+            ret += f"| {music_symbol}:{bool_square(self.parent_pack.sounds)} "
             if self.parent_pokemon.sa_transfers_received:
                 ret += " +SA"
 
@@ -272,6 +430,15 @@ class PokemonForm:
                     - self.parent_pokemon.request_transfered
                 ):
                     ret += f"[{req_diff}]"
+                    if self.parent_pokemon._is_actively_requested():
+                        ret += left_arrow
+                    # else:
+                    #     if self.parent_pack and self.parent_pack.parent_combiner:
+                    #         if self.parent_pack.parent_combiner._is_selected(
+                    #             pokemon_name=self.parent_pokemon.internal_name
+                    #         ):
+                    #             ret += x_symbol
+
                 else:
                     ret += f"[{check_mark}]"
 
@@ -384,6 +551,8 @@ class Pokemon:
     forms: dict[str, PokemonForm] = field(default_factory=dict)
     resolvers: dict[int, ResolverEntry] = field(default_factory=dict)
 
+    sound_entry: SoundEntry | None = None
+
     parent_pack: Optional["Pack"] = None
     selected: bool = False
 
@@ -392,8 +561,8 @@ class Pokemon:
 
     sa_transfers_received: set[Path] = field(default_factory=set)
 
-    evo_to: int = 0
-    evo_from: int = 0
+    pre_evos: int = 0
+    evos: int = 0
 
     def select(self) -> None:
         if not self.parent_pack:
@@ -423,14 +592,31 @@ class Pokemon:
     def _remaining_requests(self) -> bool:
         return bool(self.requested - self.request_transfered)
 
+    def _is_actively_requested(self) -> bool:
+        if self._remaining_requests():
+            if self.parent_pack and self.parent_pack.registered_evolutions:
+                evos = self.parent_pack.registered_evolutions.get_evolution_names(
+                    source=self.internal_name, result=self.internal_name
+                )
+                return bool(
+                    sum(
+                        [
+                            (1 if self.parent_pack.pokemon[name].selected else 0)
+                            for name in evos
+                            if name in self.parent_pack.pokemon
+                        ]
+                    )
+                )
+        return False
+
     def get_all_export_paths(self):
         res: set[Path] = set()
         for form in self.forms.values():
             res.update(form.get_all_paths())
+        if self.sound_entry is not None:
+            res.update(self.sound_entry.get_all_files())
         res.update(self.sa_transfers_received)
-        for fa in self.parent_pack.feature_assignments:
-            if self.internal_name in fa.incl_pokemon:
-                res.add(fa.file_path)
+        res.update(self._get_relevant_feature_files())
         return list(res)
 
     def get_all_paths(self) -> set[Path]:
@@ -438,6 +624,22 @@ class Pokemon:
         res.update(self.get_all_export_paths())
         for r in self.resolvers.values():
             res.update(r.get_all_paths())
+        return res
+
+    def _get_relevant_feature_files(self) -> set[Path]:
+        res: set[Path] = set()
+        feats: set[str] = set(self.features)
+        for fa in self.parent_pack.feature_assignments:
+            if self.internal_name in fa.incl_pokemon:
+                res.add(fa.file_path)
+                feats.update(fa.source.get("features", list()))
+        for feat in feats:
+            if feat in self.parent_pack.features:
+                res.add(self.parent_pack.features[feat].file_path)
+            else:
+                for pf in self.parent_pack.features.values():
+                    if feat in pf.keys:
+                        res.add(pf.file_path)
         return res
 
     def __repr__(self) -> str:
@@ -473,7 +675,7 @@ class PackLocations:
     animations: set[Path] = field(default_factory=set)
     posers: set[Path] = field(default_factory=set)
 
-    sounds: set[Path] = field(default_factory=set)
+    sounds: Path | None = None
     sound_jsons: set[Path] = field(default_factory=set)
 
     lang: Path | None = None
@@ -565,12 +767,15 @@ class Pack:
         self.present_animations: dict[str, dict[str, set[Path]]] = dict()
         self.accessed_animations: set[str] = set()
 
+        self.sounds: SoundPack | None = None
+
         self.lang_entries: list[LangEntry] = list()
         self.registered_evolutions: EvolutionCollection = EvolutionCollection()
 
         self.is_base: bool = False
         self.is_mod: bool = False
 
+        self.parent_combiner: "Combiner" | None = None
         self.verbose: bool = False
 
     def run(self) -> None:
@@ -579,7 +784,7 @@ class Pack:
 
     # ============================================================
 
-    def get_all_paths(self) -> None:
+    def get_all_pack_paths(self) -> None:
         path_set: set[Path] = set()
         for p in self.pokemon.values():
             path_set.update(p.get_all_paths())
@@ -592,6 +797,7 @@ class Pack:
                 path_set.update(self.present_animations[x][y])
         for le in self.lang_entries:
             path_set.add(le.file_path)
+        path_set.update(self.sounds.get_all_files())
         return path_set
 
     def export(
@@ -609,7 +815,7 @@ class Pack:
 
         output_path.mkdir(parents=True, exist_ok=True)
 
-        _overall_set = self.get_all_paths()
+        _overall_set = self.get_all_pack_paths()
 
         # -----------------------------------------
         path_set: set[Path] = set()
@@ -661,7 +867,7 @@ class Pack:
             )
             del_flag = True
         except PermissionError:
-            print(f"Could not delete unused files for {self.name}")
+            print(f"Could not exclude unused files for {self.name}")
             if move_leftovers:
                 print(".Partial pack will not be produced")
             del_flag = False
@@ -670,22 +876,28 @@ class Pack:
         #     if (p := (self.folder_location / p_i)).exists():
         #         p.unlink()
 
+        mv_count = 0
         if isinstance(move_leftovers, Path) and del_flag:
-            self._move_leftovers(export_path=move_leftovers)
+            mv_count = self._move_leftovers(export_path=move_leftovers)
 
-        outp = f"{c} files moved "
+        outp = f"{c} Moved "
         if d := (len(path_set) - c):
-            outp += f"- {d} missed "
-        outp += f"| {self.name}"
+            outp += f"- {d} Missed "
+        if mv_count:
+            outp += f"| {mv_count} Repackaged "
+        if d := (len(delete_set)):
+            outp += f"| {d} Excluded "
+        outp += f"|| {self.name}"
         print(outp)
 
-    def _move_leftovers(self, export_path: Path) -> None:
-        if len([i for i in self.folder_location.rglob("*") if i.is_dir()]):
+    def _move_leftovers(self, export_path: Path) -> int | None:
+        if x := (len([i for i in self.folder_location.rglob("*") if i.is_dir()])):
             shutil.make_archive(
                 f"{str((export_path / f"[ce]_{self.name}"))}",
                 format="zip",
                 root_dir=str(self.folder_location),
             )
+            return x
 
     def _export_langs(self, export_path: Path) -> None:
         langs = self._get_lang_export()
@@ -723,6 +935,14 @@ class Pack:
                     res_d[k] = lang.source[k]
 
             res.append(LangResultEntry(name=lang.name, data=res_d))
+        return res
+
+    def _get_sound_export(self) -> dict:
+        res = dict()
+        for pok in self.pokemon.values():
+            if pok.selected:
+                if pok.sound_entry is not None:
+                    res.update(pok.sound_entry.data)
         return res
 
     # ============================================================
@@ -819,8 +1039,8 @@ class Pack:
                     val.lang = x
                 if (x := (tmpast / "textures" / "pokemon")).exists():
                     val.textures = x
-                if (x := (tmpast / "sounds")).exists():
-                    val.sounds.add(x)
+                if (x := (tmpast / "sounds" / "pokemon")).exists():
+                    val.sounds = x
                 if (x := (tmpast / "sounds.json")).exists():
                     val.sound_jsons.add(x)
 
@@ -852,6 +1072,8 @@ class Pack:
         self._get_pokemon()
         self._get_lang()
 
+        self._get_sounds()
+
         self._stamp_forms()
 
         for p in self.pokemon.values():
@@ -862,7 +1084,7 @@ class Pack:
             print(f"[{check_mark}] {self.name}")
 
     # ------------------------------------------------------------
-    @safe_parse_per_file(component_attr="features", DEBUG=DEBUG)
+    @safe_parse_per_file(component_attr="species_features", DEBUG=DEBUG)
     def _get_features(self, input_file_path: Path, data: dict) -> None:  # STEP 0
         self.features[input_file_path.stem] = Feature(
             name=input_file_path.stem,
@@ -1304,8 +1526,6 @@ class Pack:
         for p_entry in self.present_animations.values():
             self.defined_animation_types.update(list(p_entry.keys()))
 
-    # ------------------------------
-
     def _assign_requested_animations(self) -> None:  # STEP 3c
         for pok in self.pokemon.values():
             for res in pok.resolvers.values():
@@ -1343,6 +1563,8 @@ class Pack:
                         res.requested_animations[p_name] = dict()
                     if anim_name not in res.requested_animations[p_name]:
                         res.requested_animations[p_name][anim_name] = False
+
+    # ------------------------------
 
     def _navigate_poser_entry(
         self, poser_entry: dict, existing_set: set[tuple[str, str]] | None = None
@@ -1484,21 +1706,50 @@ class Pack:
 
     # ------------------------------------------------------------
 
-    def _get_sounds(self):
-        pass
+    def _get_sounds(self) -> None:
+        self.sounds = SoundPack(
+            _parent_pack=self, _base_folder=self.component_location.sounds
+        )
+        if self.component_location.sound_jsons:
+            try:
+                sj = list(self.component_location.sound_jsons)[0]
+                with sj.open() as f:  # TODO
+                    data = json.load(f)
+            except (UnicodeDecodeError, JSONDecodeError) as _:
+                if DEBUG:
+                    print(f"WARN!! - {sj}")
+                    _ = input()
+                    return
+            self.sounds.assignment = bcfo(file_path=sj, source=data)
 
-    def _get_sound_files(self):
-        pass
+        self._get_sound_files()
+        self.sounds.process()
+        self._assign_sound_files()
+
+    def _get_sound_files(self) -> None:
+        if self.component_location.sounds:
+            for sound_file in self.component_location.sounds.rglob("*.ogg"):
+                self.sounds._loose_files.add(sound_file)
+
+    def _assign_sound_files(self) -> None:
+        for pokemon_sound in self.sounds:
+            if pokemon_sound.internal_name not in self.pokemon:
+                self.pokemon[pokemon_sound.internal_name] = Pokemon(
+                    internal_name=pokemon_sound.internal_name,
+                    dex_id=-1,
+                    forms={"base_form": PokemonForm(name="base_form")},
+                )
+            self.pokemon[pokemon_sound.internal_name].sound_entry = pokemon_sound
 
     # ------------------------------------------------------------
 
     def _assign_evo_score(self):
         for entry in self.registered_evolutions.evolutions:
             if (x := self._cleanup_evo_name(entry.to_pokemon)) in self.pokemon:
-                self.pokemon[x].evo_to += 1
+                self.pokemon[x].pre_evos += 1
 
             if (x := self._cleanup_evo_name(entry.from_pokemon)) in self.pokemon:
-                self.pokemon[x].evo_from += 1
+                self.pokemon[x].evos += 1
 
     def _cleanup_evo_name(self, name: str) -> str:
         if name:
@@ -1514,6 +1765,23 @@ class Pack:
             for f in p.forms.values():
                 f.parent_pack = self
                 f.parent_pokemon = p
+
+    # ============================================================
+
+    def _dirty_pokedex_fix(self) -> None:
+        _edited_files: set[Path] = set()
+        for pok in self.pokemon.values():
+            if not pok.selected:
+                continue
+            for form in pok.forms.values():
+                for x in [form.species, form.species_additions]:
+                    if x is not None:
+                        e_path = x.file_path
+                        if e_path not in _edited_files:
+                            data = json.loads(e_path.read_text())
+                            data["implemented"] = True
+                            e_path.write_text(json.dumps(data, indent=8))
+                            _edited_files.add(e_path)
 
     # ============================================================
 
@@ -1580,6 +1848,7 @@ class Combiner:
         for pack in self.packs:
             if pack.is_base or (pack.is_mod and (not self._process_mods)):
                 continue
+            pack._dirty_pokedex_fix()
             pack.export(
                 export_path=self.output_pack_path,
                 move_leftovers=self.output_pack_path.parent,
@@ -1587,7 +1856,11 @@ class Combiner:
 
         self._export_langs(folder_path=self.output_pack_path)
 
+        self._export_sound_json(folder_path=self.output_pack_path)
+
         self._write_pack_mcmeta(folder_path=self.output_pack_path)
+
+        self._write_credits(folder_path=self.output_pack_path)
 
         try:
             shutil.move(
@@ -1618,6 +1891,44 @@ class Combiner:
         export_path.mkdir(parents=True, exist_ok=True)
         for l_entry in res_d.values():
             (export_path / l_entry.name).write_text(json.dumps(l_entry.data))
+
+    def _export_sound_json(self, folder_path: Path):
+        res = dict()
+        for p in self.packs:
+            res.update(p._get_sound_export())
+
+        (folder_path / "assets" / "cobblemon" / "sounds.json").write_text(
+            json.dumps(res, indent=4)
+        )
+
+    def _write_credits(self, folder_path: Path) -> None:
+        (folder_path / "credits.txt").write_text(self._create_credits())
+
+    def _create_credits(self) -> str:
+        res: dict[str, Iterable[str]] = dict()
+        res_packs: set[str] = set()
+        for p in self.packs:
+            if (p.name == "BASE") or (p.is_mod and (not self._process_mods)):
+                continue
+            for pok in p.pokemon:
+                if p.pokemon[pok].selected:
+                    if pok not in res:
+                        res[pok] = set()
+                    res[pok].add(p.name)
+                    res_packs.add(p.name)
+
+        for key in res:
+            res[key] = list(res[key])
+
+        outp_text = "Many thanks to the creators of these packs of their work"
+
+        return (
+            outp_text
+            + "\n\n"
+            + json.dumps(list(res_packs), indent=2)
+            + "\n\n"
+            + json.dumps(res, indent=3)
+        )
 
     def _get_pack_mcmeta(self) -> dict[str, dict[str, Any]]:
         return {"pack": {"pack_format": 15, "description": "CORE Test"}}
@@ -1660,6 +1971,9 @@ class Combiner:
 
         self._remove_empty_packs()
 
+        for p in self.packs:
+            p.parent_combiner = self
+
         if len(["_" for p in self.packs if p.is_base]) > 1:
             raise RuntimeError("Multiple [BASE] type packs present.")
 
@@ -1688,19 +2002,35 @@ class Combiner:
         return sorted(
             inp,
             key=lambda x: (
-                max([p.pokemon[x].evo_from for p in self.packs if (x in p.pokemon)]),
-                max(
-                    [
-                        (p.pokemon[x].requested - p.pokemon[x].request_transfered)
-                        for p in self.packs
-                        if (x in p.pokemon)
-                    ]
-                ),
-                (
-                    max([p.pokemon[x].evo_to for p in self.packs if (x in p.pokemon)])
-                    + max(
-                        [p.pokemon[x].evo_from for p in self.packs if (x in p.pokemon)]
+                sum([1 for p in self.packs if (x in p.pokemon)]),
+                -(
+                    int(
+                        any(
+                            [
+                                (p.pokemon[x]._is_actively_requested())
+                                for p in self.packs
+                                if (x in p.pokemon)
+                            ]
+                        )
                     )
+                ),
+                -(
+                    max(
+                        [
+                            (
+                                (p.pokemon[x]._remaining_requests())
+                                if p.pokemon[x]._is_actively_requested()
+                                else 0
+                            )
+                            for p in self.packs
+                            if (x in p.pokemon)
+                        ]
+                    )
+                ),
+                max([p.pokemon[x].evos for p in self.packs if (x in p.pokemon)]),
+                (
+                    max([p.pokemon[x].pre_evos for p in self.packs if (x in p.pokemon)])
+                    + max([p.pokemon[x].evos for p in self.packs if (x in p.pokemon)])
                 ),
             ),
         )
@@ -2113,6 +2443,17 @@ class Combiner:
         print(f"\033[A\r{' '*40}\r", end="")
         print(f"- {k_in}. [{selected_key}]")
         print("=" * 25)
+
+    def _is_selected(self, pokemon_name: str) -> bool:
+        return bool(
+            sum(
+                [
+                    p.pokemon[pokemon_name].selected
+                    for p in self.packs
+                    if (pokemon_name in p.pokemon)
+                ]
+            )
+        )
 
     # ------------------------------------------------------------
 
