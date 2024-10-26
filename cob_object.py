@@ -2508,6 +2508,7 @@ if __name__ == "__main__":
     elif RUN_TYPE == 2:
         comb = Combiner()
         comb.run()
+        _ = input("\n\nPress [Enter] to exit..")
     elif RUN_TYPE == 3:
         p = Pack(
             zip_location=Path(
