@@ -1871,10 +1871,6 @@ class Combiner:
 
         self._compress_pack(folder_path=self.output_pack_path)
 
-        try:
-            shutil.rmtree(str(self.dir_name / ".temp"))
-        except:
-            print(" -Could not remove temporary folder")
         self._cleanup()
 
     def _export_langs(self, folder_path: Path) -> None:
@@ -2459,6 +2455,10 @@ class Combiner:
     # ------------------------------------------------------------
 
     def _cleanup(self) -> None:
+        try:
+            shutil.rmtree(str(self.dir_name / ".temp"))
+        except:
+            print(" -Could not remove temporary folder")
         try:
             shutil.rmtree(self.output_pack_path)
         except:
