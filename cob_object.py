@@ -1720,12 +1720,11 @@ class Pack:
                 sj = list(self.component_location.sound_jsons)[0]
                 with sj.open() as f:  # TODO
                     data = json.load(f)
+                    self.sounds.assignment = bcfo(file_path=sj, source=data)
             except (UnicodeDecodeError, JSONDecodeError) as _:
                 if DEBUG:
                     print(f"WARN!! - {sj}")
                     _ = input()
-                    return
-            self.sounds.assignment = bcfo(file_path=sj, source=data)
 
         self._get_sound_files()
         self.sounds.process()
