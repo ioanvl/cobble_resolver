@@ -146,8 +146,11 @@ class SoundPack:
             else:
                 if key_parts[0] != "pokemon":
                     continue
-                pok_name = key_parts[1]
-                move_name = key_parts[2]
+                try:
+                    pok_name = key_parts[1]
+                    move_name = key_parts[2]
+                except:
+                    continue
 
             if pok_name not in self:
                 self.entries[pok_name] = SoundEntry(internal_name=pok_name)
@@ -161,6 +164,8 @@ class SoundPack:
             se.data[key] = sounds_data_entry
 
             for s_file_e in sounds_data_entry.get("sounds", list()):
+                if isinstance(s_file_e, dict):
+                    s_file_e = s_file_e["name"]
                 parts: list[str] = s_file_e.split("/")
                 if not parts[-1].endswith(".ogg"):
                     parts[-1] = f"{parts[-1]}.ogg"
@@ -869,7 +874,7 @@ class Pack:
         except PermissionError:
             print(f"Could not exclude unused files for {self.name}")
             if move_leftovers:
-                print(".Partial pack will not be produced")
+                print("-Partial pack will not be produced")
             del_flag = False
         # -----------------------------------------
         # for p_i in ["pack.png", "pack.mcmeta"]:
