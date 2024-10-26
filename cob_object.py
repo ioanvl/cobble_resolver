@@ -2456,13 +2456,17 @@ class Combiner:
 
     def _cleanup(self) -> None:
         try:
+            print("Deleting temporary folder")
             shutil.rmtree(str(self.dir_name / ".temp"))
         except:
-            print(" -Could not remove temporary folder")
+            print(f"{clear_line} -Could not remove temporary folder")
+        print(clear_line, end="")
         try:
+            print("Deleting intermefite folder")
             shutil.rmtree(self.output_pack_path)
         except:
-            print(" -Could not remove intermediate folder")
+            print(f"{clear_line} -Could not remove intermediate folder")
+        print(clear_line, end="")
 
 
 RUN_TYPE = 2
