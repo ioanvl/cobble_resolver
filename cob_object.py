@@ -1817,6 +1817,8 @@ class Combiner:
     def __init__(self, dir_name: Path | None = None):
         if (not dir_name) or (not dir_name.exists()):
             self.dir_name = Path(filedialog.askdirectory())
+            if self.dir_name is None:
+                exit()
         else:
             self.dir_name = dir_name
 
