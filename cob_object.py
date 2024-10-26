@@ -1875,6 +1875,7 @@ class Combiner:
             shutil.rmtree(str(self.dir_name / ".temp"))
         except:
             print(" -Could not remove temporary folder")
+        self._cleanup()
 
     def _export_langs(self, folder_path: Path) -> None:
         res_d: dict[str, LangResultEntry] = dict()
@@ -2457,8 +2458,11 @@ class Combiner:
 
     # ------------------------------------------------------------
 
-    def _cleanup(self) -> None:  # TODO
-        pass
+    def _cleanup(self) -> None:
+        try:
+            shutil.rmtree(self.output_pack_path)
+        except:
+            print(" -Could not remove intermediate folder")
 
 
 RUN_TYPE = 2
