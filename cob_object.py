@@ -843,6 +843,9 @@ class Pack:
         c = 0
         for p in path_set:
             if p:
+                if p.is_dir():
+                    print(f"[e] - {p}")  # TODO sometimes a "cobblemon\sounds\pokemon"
+                    continue  # appears here and fucks things up
                 np = output_path / p.relative_to(self.folder_location)
                 np.parent.mkdir(parents=True, exist_ok=True)
 
@@ -1777,15 +1780,45 @@ class Pack:
         for pok in self.pokemon.values():
             if not pok.selected:
                 continue
+            flag = False
             for form in pok.forms.values():
                 for x in [form.species, form.species_additions]:
                     if x is not None:
+                        flag = True
                         e_path = x.file_path
                         if e_path not in _edited_files:
                             data = json.loads(e_path.read_text())
                             data["implemented"] = True
                             e_path.write_text(json.dumps(data, indent=8))
                             _edited_files.add(e_path)
+            if not flag:
+                if [
+                    item
+                    for form in pok.forms.values()
+                    for item in form.spawn_pool
+                    if item
+                ]:
+                    sa = {
+                        "target": f"cobblemon:{pok.internal_name}",
+                        "implemented": True,
+                    }
+                    if self.component_location.species_additions:
+                        target_path = (
+                            list(self.component_location.species_additions)[0]
+                            / f"{pok.internal_name}.json"
+                        )
+                    else:
+                        target_path = (
+                            self.folder_location
+                            / "data"
+                            / "cobblemon"
+                            / "species_additions"
+                        )
+                        target_path.mkdir(parents=True, exist_ok=True)
+                        target_path = target_path / f"{pok.internal_name}.json"
+
+                    target_path.write_text(json.dumps(sa, indent=2))
+                    pok.forms[list(pok.forms.keys())[0]].spawn_pool.append(target_path)
 
     # ============================================================
 
@@ -2512,8 +2545,12 @@ if __name__ == "__main__":
         comb = Combiner(dir_name=hot_dir)
         comb.run()
     elif RUN_TYPE == 2:
+        # try:
         comb = Combiner()
         comb.run()
+        # except Exception as e:
+        #     print(f"\n\n{'='*15}\nEXCEPTION\n{'='*15}\n\n")
+        #     print(e)
         _ = input("\n\nPress [Enter] to exit..")
     elif RUN_TYPE == 3:
         p = Pack(
