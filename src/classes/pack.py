@@ -320,7 +320,6 @@ class Pack:
 
     def _prepare(self) -> None:
         self._folder_setup()
-        self._unpack()
         self._determine_base()
         self._get_paths()
 
@@ -343,13 +342,23 @@ class Pack:
             return
 
         if self.folder_location is not None:
-            return
+            if self._extraction_path is None:
+                self._extraction_path = self.folder_location.parent / ".temp"
+            new_folder_location = self._extraction_path / self.folder_location.name
+            new_folder_location.mkdir(parents=True, exist_ok=True)
+            print(f"Copying {self.folder_location.name}")
+            shutil.copytree(
+                src=self.folder_location, dst=new_folder_location, dirs_exist_ok=True
+            )
+            self.folder_location = new_folder_location
+            print(clear_line, end="")
 
         if self.zip_location is not None:
             if self._extraction_path is None:
                 self._extraction_path = self.zip_location.parent / ".temp"
             self.folder_location = self._extraction_path / self.zip_location.stem
             self.folder_location.mkdir(parents=True, exist_ok=True)
+            self._unpack()
 
     def _unpack(self) -> None:
         if self.zip_location is None:
@@ -357,7 +366,7 @@ class Pack:
         print(f"Unpacking {self.zip_location.name}")
         with zipfile.ZipFile(str(self.zip_location), "r") as zip_ref:
             zip_ref.extractall(self.folder_location)
-        print(f"\033[A\r{' '*40}\r", end="")
+        print(clear_line, end="")
 
     def _determine_base(self) -> None:
         if (
