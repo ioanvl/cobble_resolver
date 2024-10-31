@@ -8,7 +8,7 @@ from json import JSONDecodeError
 import zipfile
 import shutil
 from cli_utils import positive_int_choice
-from c_decorators import safe_parse_per_file
+from safe_parse_deco import safe_parse_per_file
 from cli_utils import clear_line
 
 DEBUG = False
