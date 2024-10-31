@@ -14,6 +14,8 @@ from classes.pack import Pack
 from classes.pokemon import Pokemon
 from classes.pokemon_form import PokemonForm
 
+from .choice_rules import DualChoise_Simple, DualChoise_Risky
+
 
 class Combiner:
     def __init__(self, dir_name: Path | None = None):
@@ -42,6 +44,7 @@ class Combiner:
         self._prepare()
         self._process()
         self.export()
+        self._cleanup()
 
     def _prep_output_path(self) -> None:
         try:
@@ -79,8 +82,6 @@ class Combiner:
             print("Failed to get icon..")
 
         self._compress_pack(folder_path=self.output_pack_path)
-
-        self._cleanup()
 
     def _export_langs(self, folder_path: Path) -> None:
         res_d: dict[str, LangResultEntry] = dict()
@@ -478,133 +479,20 @@ class Combiner:
             ][0].forms["base_form"]
 
             for _check in [
-                self._dual_choice_mod_and_remodel,
-                self._dual_choice_mod_and_pack_addition,
-                self._dual_choice_mod_and_species,
-                self._dual_choice_mod_w_g_and_spawn,
-                self._dual_choice_mod_and_req_pack,
-                self._dual_choice_mod_and_req_pack_2,
-                self._dual_choice_mod_remodel,
-                self._dual_choice_card,
-                self._dual_choice_card_2,
-                self._dual_choice_card_3,
+                DualChoise_Simple._dual_choice_mod_and_remodel,
+                DualChoise_Simple._dual_choice_mod_and_pack_addition,
+                DualChoise_Risky._dual_choice_mod_and_species,
+                DualChoise_Risky._dual_choice_mod_w_g_and_spawn,
+                DualChoise_Risky._dual_choice_mod_and_req_pack,
+                DualChoise_Risky._dual_choice_mod_and_req_pack_2,
+                DualChoise_Simple._dual_choice_mod_remodel,
+                DualChoise_Simple._dual_choice_card,
+                DualChoise_Simple._dual_choice_card_2,
+                DualChoise_Simple._dual_choice_card_3,
             ]:
                 pack, stype = _check(pok_mod=fm, pok_other=fo)
                 if pack is not None:
                     return (pack, stype)
-        return (None, None)
-
-    def _dual_choice_mod_and_remodel(
-        self, pok_mod: PokemonForm, pok_other: PokemonForm
-    ) -> tuple[str, Literal["G"]] | tuple[None, None]:
-        if (pok_mod.has_spawn() and pok_mod.has_species_data()) and (
-            (not pok_other.has_spawn())
-            and (not pok_other.has_species_data())
-            and pok_other.is_graphically_complete()
-        ):
-            return (pok_other.parent_pack.name, "G")
-        return (None, None)
-
-    def _dual_choice_mod_and_pack_addition(
-        self, pok_mod: PokemonForm, pok_other: PokemonForm
-    ) -> tuple[str, Literal["G2"]] | tuple[None, None]:
-        if (not pok_mod.has_graphics()) and pok_other.is_graphically_complete():
-            return (pok_other.parent_pack.name, "G2")
-        return (None, None)
-
-    def _dual_choice_mod_and_species(
-        self, pok_mod: PokemonForm, pok_other: PokemonForm
-    ) -> tuple[str, Literal["G3-R"]] | tuple[None, None]:
-        if pok_other.is_species() and self._allow_risky_rules:
-            return (pok_other.parent_pack.name, "G3-R")
-
-        return (None, None)
-
-    def _dual_choice_mod_w_g_and_spawn(
-        self, pok_mod: PokemonForm, pok_other: PokemonForm
-    ) -> tuple[str, Literal["G4-R"]] | tuple[None, None]:
-        if self._allow_risky_rules:
-            if (
-                (
-                    pok_mod.is_graphically_complete()
-                    and pok_other.is_graphically_complete()
-                )
-                and (pok_mod.has_sp_data() and (not pok_other.has_sp_data()))
-                and ((not pok_mod.has_spawn()) and pok_other.has_spawn())
-            ):
-                return (pok_other.parent_pack.name, "G4-R")
-
-        return (None, None)
-
-    def _dual_choice_mod_and_req_pack(
-        self, pok_mod: PokemonForm, pok_other: PokemonForm
-    ) -> tuple[str, Literal["G5-R"]] | tuple[None, None]:
-        if self._allow_risky_rules:
-            if pok_mod.is_complete() and (
-                (not pok_other.has_graphics()) and (pok_other.is_requested())
-            ):
-                return (pok_other.parent_pack.name, "G5-R")
-        return (None, None)
-
-    def _dual_choice_mod_and_req_pack_2(
-        self, pok_mod: PokemonForm, pok_other: PokemonForm
-    ) -> tuple[str, Literal["G5b-R"]] | tuple[None, None]:
-        if self._allow_risky_rules:
-            if pok_mod.is_complete() and (
-                (pok_other.has_graphics())
-                and (pok_other.is_requested())
-                and pok_other.has_spawn()
-                and (not pok_other.has_sp_data())
-            ):
-                return (pok_other.parent_pack.name, "G5b-R")
-        return (None, None)
-
-    def _dual_choice_mod_remodel(
-        self, pok_mod: PokemonForm, pok_other: PokemonForm
-    ) -> tuple[str, Literal["G5c-R"]] | tuple[None, None]:
-        if pok_mod.is_complete() and (
-            (not pok_other.has_spawn())
-            and (not pok_other.has_sp_data() and pok_other.is_graphically_complete())
-        ):
-            return (pok_other.parent_pack.name, "G5c-R")
-        return (None, None)
-
-    def _dual_choice_card(
-        self, pok_mod: PokemonForm, pok_other: PokemonForm
-    ) -> tuple[str, Literal["CARD"]] | tuple[None, None]:
-        if (
-            pok_mod.is_complete()
-            and pok_mod.parent_pack.is_base
-            and (not pok_other.has_spawn())
-            and (not pok_other.has_sp_data())
-            and (not pok_other.is_graphically_complete())
-        ):
-            return (pok_mod.parent_pack.name, "CARD")
-        return (None, None)
-
-    def _dual_choice_card_2(
-        self, pok_mod: PokemonForm, pok_other: PokemonForm
-    ) -> tuple[str, Literal["CARD2"]] | tuple[None, None]:
-        if (
-            pok_mod.parent_pack.is_base
-            and (not pok_mod.has_spawn())
-            and (not pok_mod.has_graphics())
-            and (pok_other.comp_stamp[4:] == [True, False, False, True, True])
-        ):
-            return (pok_other.parent_pack.name, "CARD2")
-        return (None, None)
-
-    def _dual_choice_card_3(
-        self, pok_mod: PokemonForm, pok_other: PokemonForm
-    ) -> tuple[str, Literal["CARD3"]] | tuple[None, None]:
-        if (
-            pok_mod.parent_pack.is_base
-            and (pok_mod.is_graphically_complete())
-            and (not pok_other.has_spawn())
-            and (not pok_other.has_sp_data())
-            and (pok_other.comp_stamp[4:] == [True, False, False, True, True])
-        ):
-            return (pok_mod.parent_pack.name, "CARD3")
         return (None, None)
 
     def _print_pack_choise(

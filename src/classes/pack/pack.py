@@ -6,7 +6,7 @@ import zipfile
 from dataclasses import dataclass, field
 from json import JSONDecodeError
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from constants.char_constants import TextSymbols
 from constants.generic import default_animation_types
@@ -25,6 +25,7 @@ from classes.base_classes import (
     bcfo,
 )
 from classes.evolutions import EvolutionCollection, EvolutionEntry
+from classes.pack.poser_parser import PoserResolver
 from classes.pokemon import Pokemon
 from classes.pokemon_form import PokemonForm, ResolverEntry
 from classes.sounds import SoundPack
@@ -350,8 +351,8 @@ class Pack:
             shutil.copytree(
                 src=self.folder_location, dst=new_folder_location, dirs_exist_ok=True
             )
-            self.folder_location = new_folder_location
             print(clear_line, end="")
+            self.folder_location = new_folder_location
 
         if self.zip_location is not None:
             if self._extraction_path is None:
@@ -923,18 +924,20 @@ class Pack:
                     for def_anim in self.defined_animation_types:
                         if def_anim in data:
                             requested.add(
-                                self._parse_poser_animation_line(
+                                PoserResolver._parse_poser_animation_line(
                                     poser_line=data[def_anim]
                                 )
                             )
                     if "animations" in data:
                         requested.update(
-                            self._parse_poser_animation_entry(data["animations"])
+                            PoserResolver._parse_poser_animation_entry(
+                                data["animations"]
+                            )
                         )
 
                     for _, pose_data in (data.get("poses", dict())).items():
                         requested.update(
-                            self._navigate_poser_entry(poser_entry=pose_data)
+                            PoserResolver._navigate_poser_entry(poser_entry=pose_data)
                         )
 
                 for req_entry in list(requested):
@@ -945,93 +948,6 @@ class Pack:
                         res.requested_animations[p_name][anim_name] = False
 
     # ------------------------------
-
-    def _navigate_poser_entry(
-        self, poser_entry: dict, existing_set: set[tuple[str, str]] | None = None
-    ) -> set[tuple[str, str]]:
-        if existing_set is None:
-            existing_set: set[tuple[str, str]] = set()
-
-        for t in ["quirks", "animations"]:
-            existing_set.update(
-                self._parse_poser_animation_entry(poser_entry.get(t, None))
-            )
-
-        return existing_set
-
-    def _parse_poser_animation_entry(
-        self, poser_entry: Any, existing_set: set[tuple[str, str]] | None = None
-    ) -> set[tuple[str, str]]:
-        if existing_set is None:
-            existing_set: set[tuple[str, str]] = set()
-
-        if isinstance(poser_entry, str):
-            existing_set.add(self._parse_poser_animation_line(poser_line=poser_entry))
-        elif isinstance(poser_entry, list):
-            existing_set.update(
-                self._parse_poser_animation_list(poser_entry=poser_entry)
-            )
-        elif isinstance(poser_entry, dict):
-            existing_set.update(
-                self._parse_poser_animation_dict(poser_entry=poser_entry)
-            )
-
-        return existing_set
-
-    def _parse_poser_animation_list(
-        self, poser_entry: list, existing_set: set[tuple[str, str]] | None = None
-    ) -> set[tuple[str, str]]:
-        if existing_set is None:
-            existing_set: set[tuple[str, str]] = set()
-
-        for pl in poser_entry:
-            existing_set.update(self._parse_poser_animation_entry(pl))
-
-        return existing_set
-
-    def _parse_poser_animation_dict(
-        self, poser_entry: dict, existing_set: set[tuple[str, str]] | None = None
-    ) -> set[tuple[str, str]]:
-        if existing_set is None:
-            existing_set: set[tuple[str, str]] = set()
-
-        if "animations" in poser_entry:
-            existing_set.update(
-                self._parse_poser_animation_entry(poser_entry=poser_entry["animations"])
-            )
-            del poser_entry["animations"]
-
-        for move, pl in poser_entry.items():
-            existing_set.update(self._parse_poser_animation_entry(pl))
-
-        return existing_set
-
-    def _parse_poser_animation_line(self, poser_line: str | None) -> tuple[str, str]:
-        if not poser_line:
-            return ("", "")
-
-        for stw in ["q.bedrock", "q.bedrock_quirk", "bedrock"]:
-            if poser_line.startswith(stw):
-                return self._extract_poser_animation_line(poser_line=poser_line)
-        return ("", "")
-
-    def _extract_poser_animation_line(self, poser_line: str) -> tuple[str, str]:
-        poser_line = self._extract_parentheses(poser_line=poser_line)
-        parts = poser_line.split(",")
-        name = parts[0].strip(" ''").strip('"')
-        move = parts[1]
-        if move.startswith("q."):
-            move = self._extract_parentheses(move)
-        move = move.strip(" ''").strip('"')
-        return (name, move)
-        "" "faint" ""
-
-    def _extract_parentheses(self, poser_line: str) -> str:
-        parts = poser_line.split("(")
-        poser_line = "(".join(parts[1:]) if len(parts) > 2 else parts[1]
-        parts = poser_line.split(")")
-        poser_line = ")".join(parts[:-1]) if len(parts) > 2 else parts[0]
-        return poser_line
 
     # ------------------------------
 

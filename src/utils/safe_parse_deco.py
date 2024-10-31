@@ -36,7 +36,7 @@ def safe_parse_per_file(
                             try:
                                 with file_path.open() as f:
                                     data = json.load(f)
-                            except (UnicodeDecodeError, JSONDecodeError) as _:
+                            except (UnicodeDecodeError, JSONDecodeError):
                                 if DEBUG:
                                     print(f"WARN!! - {file_path}")
                                     _ = input()
