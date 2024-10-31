@@ -1,0 +1,18 @@
+default_animation_types: list[str] = [
+    "ground_idle",
+    "ground_walk",
+    "ground_run" "air_idle",
+    "air_fly",
+    "water_idle",
+    "water_swim",
+    "render",
+    "cry",
+    "faint",
+    "recoil",
+    "blink",
+    "sleep",
+    "water_sleep",
+    "physical",
+    "special",
+    "status",
+]
