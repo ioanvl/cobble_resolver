@@ -7,18 +7,15 @@ import json
 from json import JSONDecodeError
 import zipfile
 import shutil
-from cli_utils import positive_int_choice
-from safe_parse_deco import safe_parse_per_file
-from cli_utils import clear_line
+from utils.cli_utils.keypress import positive_int_choice
+from utils.safe_parse_deco import safe_parse_per_file
+from utils.cli_utils.keypress import clear_line
+from constants.char_constants import TextSymbols
+from utils.cli_utils.generic import bool_square, line_header
+from utils.directory_utils import clear_empty_dir
 
 DEBUG = False
 
-square_f = "\u25a3"
-square_e = "\u25a1"
-check_mark = "\u2713"
-left_arrow = "\u2190"
-x_symbol = "\u0078"
-music_symbol = "\u266a"
 
 default_animation_types: list[str] = [
     "ground_idle",
@@ -38,33 +35,6 @@ default_animation_types: list[str] = [
     "special",
     "status",
 ]
-
-
-def bool_square(inp: bool = False) -> str:
-    return square_f if inp else square_e
-
-
-def line_header(text: str = ""):
-    print(f"\n#{'='*25}\n#  {text.capitalize()}\n#{'='*25}\n")
-
-
-def clear_empty_dir(
-    s_path: Path, verbose: bool = False, items_to_delete: list[str] = list()
-):
-    temp = [x for x in s_path.iterdir()]
-    for item in temp:
-        if item.name in items_to_delete:
-            if item.is_dir():
-                shutil.rmtree(item)
-            else:
-                item.unlink()
-
-        if item.is_dir():
-            clear_empty_dir(
-                s_path=item, verbose=verbose, items_to_delete=items_to_delete
-            )
-            if not len([x for x in item.rglob("*")]):
-                item.rmdir()
 
 
 @dataclass
@@ -424,7 +394,9 @@ class PokemonForm:
         ret += f"/{self.__square_atr(self.species_additions)}:SA "
 
         if self.name == "base_form" and (self.parent_pokemon is not None):
-            ret += f"| {music_symbol}:{bool_square(self.parent_pack.sounds)} "
+            ret += (
+                f"| {TextSymbols.music_symbol}:{bool_square(self.parent_pack.sounds)} "
+            )
             if self.parent_pokemon.sa_transfers_received:
                 ret += " +SA"
 
@@ -436,16 +408,16 @@ class PokemonForm:
                 ):
                     ret += f"[{req_diff}]"
                     if self.parent_pokemon._is_actively_requested():
-                        ret += left_arrow
+                        ret += TextSymbols.left_arrow
                     # else:
                     #     if self.parent_pack and self.parent_pack.parent_combiner:
                     #         if self.parent_pack.parent_combiner._is_selected(
                     #             pokemon_name=self.parent_pokemon.internal_name
                     #         ):
-                    #             ret += x_symbol
+                    #             ret += TextSymbols.x_symbol
 
                 else:
-                    ret += f"[{check_mark}]"
+                    ret += f"[{TextSymbols.check_mark}]"
 
         ret += f"\n{s} {'-' * 10}"
         return ret
@@ -1089,7 +1061,7 @@ class Pack:
 
         if not self.verbose:
             print(clear_line, end="")
-            print(f"[{check_mark}] {self.name}")
+            print(f"[{TextSymbols.check_mark}] {self.name}")
 
     # ------------------------------------------------------------
     @safe_parse_per_file(component_attr="species_features", DEBUG=DEBUG)

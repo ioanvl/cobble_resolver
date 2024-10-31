@@ -3,7 +3,7 @@ import json
 from json.decoder import JSONDecodeError
 from pathlib import Path
 from typing import Callable, TypeVar
-from cli_utils import clear_line
+from utils.cli_utils.keypress import clear_line
 from collections.abc import Iterable
 
 T = TypeVar("T")
