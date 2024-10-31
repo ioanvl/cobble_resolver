@@ -1,34 +1,33 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
-from enum import Enum
-from pathlib import Path
-from tkinter import filedialog
-from typing import Any, Generator, Iterable, Literal, LiteralString, Optional
+
 import json
-from json import JSONDecodeError
-import zipfile
 import shutil
-from utils.cli_utils.keypress import positive_int_choice
-from utils.safe_parse_deco import safe_parse_per_file
-from utils.cli_utils.keypress import clear_line
+import zipfile
+from dataclasses import dataclass, field
+from json import JSONDecodeError
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
 from constants.char_constants import TextSymbols
-from utils.cli_utils.generic import bool_square, line_header
-from utils.directory_utils import clear_empty_dir
-from classes.pokemon_form import PokemonForm, ResolverEntry
-from classes.pokemon import Pokemon
-from classes.sounds import SoundEntry, SoundPack
-from classes.evolutions import EvolutionEntry, EvolutionCollection
-from constants.runtime_const import DEBUG
 from constants.generic import default_animation_types
-from typing import TYPE_CHECKING
+from constants.runtime_const import DEBUG
+from utils.cli_utils.generic import bool_square
+from utils.cli_utils.keypress import clear_line
+from utils.directory_utils import clear_empty_dir
+from utils.safe_parse_deco import safe_parse_per_file
+
 from classes.base_classes import (
-    bcfo,
-    FeatureType,
     Feature,
     FeatureAssignment,
+    FeatureType,
     LangEntry,
     LangResultEntry,
+    bcfo,
 )
+from classes.evolutions import EvolutionCollection, EvolutionEntry
+from classes.pokemon import Pokemon
+from classes.pokemon_form import PokemonForm, ResolverEntry
+from classes.sounds import SoundPack
 
 if TYPE_CHECKING:
     from classes.combiner import Combiner
@@ -386,7 +385,7 @@ class Pack:
                     if data.get("id", "") == "cobblemon":
                         self.is_base = True
                         return
-            except:
+            except Exception:
                 pass
 
     def _get_paths(self) -> None:
@@ -1204,6 +1203,6 @@ class Pack:
             if (pagination) and (not (i % pagination)) and i:
                 _ = input("Press any key to continue..")
                 print(f"\033[A\r{' '*40}\r", end="")
-        print(
-            f"\nPokemon: {len(self.pokemon)}  Forms: {sum([len(p.forms) for p in self.pokemon.values()])}"
-        )
+        outp = f"\nPokemon: {len(self.pokemon)}  "
+        outp += f"Forms: {sum([len(p.forms) for p in self.pokemon.values()])}"
+        print(outp)

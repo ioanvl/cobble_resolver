@@ -1,22 +1,11 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
-from enum import Enum
-from pathlib import Path
-from tkinter import filedialog
-from typing import Any, Generator, Iterable, Literal, LiteralString, Optional
-import json
-from json import JSONDecodeError
-import zipfile
-import shutil
-from utils.cli_utils.keypress import positive_int_choice
-from utils.safe_parse_deco import safe_parse_per_file
-from utils.cli_utils.keypress import clear_line
-from constants.char_constants import TextSymbols
-from utils.cli_utils.generic import bool_square, line_header
-from utils.directory_utils import clear_empty_dir
-from typing import TYPE_CHECKING
-from classes.base_classes import bcfo
 
+import json
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Generator, Optional
+
+from classes.base_classes import bcfo
 
 if TYPE_CHECKING:
     from classes.pack import Pack
@@ -63,7 +52,7 @@ class SoundPack:
         try:
             with self.assignment.file_path.open() as f:
                 data: dict[str, dict] = json.load(f)
-        except:
+        except Exception:
             return
 
         for key in data.keys():
@@ -78,7 +67,7 @@ class SoundPack:
                 try:
                     pok_name = key_parts[1]
                     move_name = key_parts[2]
-                except:
+                except Exception:
                     continue
 
             if pok_name not in self:

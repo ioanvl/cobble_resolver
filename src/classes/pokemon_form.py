@@ -1,28 +1,17 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
-from enum import Enum
-from pathlib import Path
-from tkinter import filedialog
-from typing import Any, Generator, Iterable, Literal, LiteralString, Optional
-import json
-from json import JSONDecodeError
-import zipfile
-import shutil
-from utils.cli_utils.keypress import positive_int_choice
-from utils.safe_parse_deco import safe_parse_per_file
-from utils.cli_utils.keypress import clear_line
-from constants.char_constants import TextSymbols
-from utils.cli_utils.generic import bool_square, line_header
-from utils.directory_utils import clear_empty_dir
-from typing import TYPE_CHECKING
 
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, LiteralString, Optional
+
+from constants.char_constants import TextSymbols
+from utils.cli_utils.generic import bool_square
 
 from classes.base_classes import bcfo
 
-
 if TYPE_CHECKING:
-    from classes.pokemon import Pokemon
     from classes.pack import Pack
+    from classes.pokemon import Pokemon
 
 
 @dataclass
