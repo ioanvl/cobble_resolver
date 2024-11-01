@@ -3,7 +3,7 @@ import shutil
 from pathlib import Path
 from tkinter import filedialog
 from typing import Any, Iterable, Literal
-
+from utils.get_resource import get_resource_path
 from constants.text_constants import DefaultNames, HelperText
 from utils.cli_utils.generic import line_header
 from utils.cli_utils.keypress import clear_line, positive_int_choice
@@ -77,14 +77,19 @@ class Combiner:
 
         self._write_credits(folder_path=self.output_pack_path)
 
-        try:
-            shutil.move(
-                Path("pack.png").resolve(), (self.output_pack_path / "pack.png")
-            )
-        except Exception:
-            print("Failed to get icon..")
+        self._get_icon()
 
         self._compress_pack(folder_path=self.output_pack_path)
+
+    def _get_icon(self) -> None:
+        try:
+            icon_path = Path(get_resource_path("src/images/cob_pack.png"))
+            shutil.copy(
+                icon_path,
+                (self.output_pack_path / "pack.png"),
+            )
+        except Exception as e:
+            print(f"Failed to get icon: {e}")
 
     def _export_langs(self, folder_path: Path) -> None:
         res_d: dict[str, LangResultEntry] = dict()

@@ -15,7 +15,7 @@ class HelperText:
         f"\n\n{'='*40}\n\n"
         "CONTINUE WITH MANUAL RESOLUTION\n\n"
         "All rules that could be automatically applied are complete.\n\n"
-        "The following packs need to be chosen manually\n"
+        "The following entities need to be chosen manually\n"
         "On each entry, press the -number- of the pack you want to use"
         f"\n\n{'='*40}\n\n"
     )
