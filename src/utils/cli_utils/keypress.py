@@ -119,9 +119,9 @@ def yn_q(default=None):
             x = input(f"{msg}\n")
         except EOFError:
             x = ""
-        if x == "y" or x == "Y":
+        if x in ["y", "Y"]:
             return True
-        elif x == "n" or x == "N":
+        elif x in ["n", "N"]:
             return False
         elif x == "":
             if default == "y":
@@ -138,10 +138,10 @@ def positive_int_choice(max_ch: int = 9, text: str | None = None) -> int:
             if prev_entry:
                 print(f"Invalid entry: [{k_in}]")
             k_in = keypress(text)
-            if k_in in ["e", "exit"]:
+            if k_in in ["exit"]:
                 exit()
             k_in = int(k_in)
-        except Exception as _:
+        except Exception:
             print(f"\033[A\r{' '*40}\r", end="")
             if prev_entry:
                 print(f"\033[A\r{' '*40}\r", end="")
