@@ -138,7 +138,7 @@ def positive_int_choice(max_ch: int = 9, text: str | None = None) -> int:
             if prev_entry:
                 print(f"Invalid entry: [{k_in}]")
             k_in = keypress(text)
-            if k_in in ["e", "exit"]:
+            if k_in in ["exit"]:
                 exit()
             k_in = int(k_in)
         except Exception:

@@ -8,9 +8,9 @@ from json import JSONDecodeError
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from constants.char_constants import TextSymbols
 from constants.generic import default_animation_types
 from constants.runtime_const import DEBUG
+from constants.text_constants import DefaultNames, TextSymbols
 from utils.cli_utils.generic import bool_square
 from utils.cli_utils.keypress import clear_line
 from utils.directory_utils import clear_empty_dir
@@ -564,8 +564,8 @@ class Pack:
             dex_id=data.get("nationalPokedexNumber", -1),
             features=data.get("features", list()),
             forms={
-                "base_form": PokemonForm(
-                    name="base_form",
+                DefaultNames.BASE_FORM: PokemonForm(
+                    name=DefaultNames.BASE_FORM,
                     aspects=(data.get("aspects", list())),
                     species=bcfo(file_path=t, source=data),
                 )
@@ -627,8 +627,8 @@ class Pack:
                 dex_id=data.get("nationalPokedexNumber", -1),
                 features=data.get("features", list()),
                 forms={
-                    "base_form": PokemonForm(
-                        name="base_form",
+                    DefaultNames.BASE_FORM: PokemonForm(
+                        name=DefaultNames.BASE_FORM,
                         aspects=data.get("aspects", list()),
                         species_additions=bcfo(file_path=input_file_path, source=data),
                     )
@@ -636,10 +636,10 @@ class Pack:
             )
         else:
             self.pokemon[target].features.extend(data.get("features", list()))
-            self.pokemon[target].forms["base_form"].species_additions = bcfo(
+            self.pokemon[target].forms[DefaultNames.BASE_FORM].species_additions = bcfo(
                 file_path=input_file_path, source=data
             )
-            self.pokemon[target].forms["base_form"].aspects.extend(
+            self.pokemon[target].forms[DefaultNames.BASE_FORM].aspects.extend(
                 data.get("aspects", list())
             )
 
@@ -680,7 +680,9 @@ class Pack:
                 self.pokemon[pok_name] = Pokemon(
                     internal_name=pok_name,
                     dex_id=-1,
-                    forms={"base_form": PokemonForm(name="base_form")},
+                    forms={
+                        DefaultNames.BASE_FORM: PokemonForm(name=DefaultNames.BASE_FORM)
+                    },
                 )
 
             aspect = ""
@@ -739,11 +741,11 @@ class Pack:
                     self.pokemon[pok_name].forms[new_form.name] = new_form
 
             else:  # else add to primary
-                self.pokemon[pok_name].forms["base_form"].spawn_pool.append(
+                self.pokemon[pok_name].forms[DefaultNames.BASE_FORM].spawn_pool.append(
                     input_file_path
                 )
-                self.pokemon[pok_name].forms["base_form"].spawn_pool = list(
-                    set(self.pokemon[pok_name].forms["base_form"].spawn_pool)
+                self.pokemon[pok_name].forms[DefaultNames.BASE_FORM].spawn_pool = list(
+                    set(self.pokemon[pok_name].forms[DefaultNames.BASE_FORM].spawn_pool)
                 )
 
     # ------------------------------------------------------------
@@ -772,7 +774,9 @@ class Pack:
             self.pokemon[pok_name] = Pokemon(
                 internal_name=pok_name,
                 dex_id=-1,
-                forms={"base_form": PokemonForm(name="base_form")},
+                forms={
+                    DefaultNames.BASE_FORM: PokemonForm(name=DefaultNames.BASE_FORM)
+                },
             )
 
         order = data.get("order", -1)
@@ -804,7 +808,9 @@ class Pack:
                     form.resolver_assignments.add(order)
                     flag = True
         if not flag:
-            self.pokemon[pok_name].forms["base_form"].resolver_assignments.add(order)
+            self.pokemon[pok_name].forms[
+                DefaultNames.BASE_FORM
+            ].resolver_assignments.add(order)
 
         self.pokemon[pok_name].resolvers[order] = new_resolver_entry
 
@@ -1032,7 +1038,9 @@ class Pack:
                 self.pokemon[pokemon_sound.internal_name] = Pokemon(
                     internal_name=pokemon_sound.internal_name,
                     dex_id=-1,
-                    forms={"base_form": PokemonForm(name="base_form")},
+                    forms={
+                        DefaultNames.BASE_FORM: PokemonForm(name=DefaultNames.BASE_FORM)
+                    },
                 )
             self.pokemon[pokemon_sound.internal_name].sound_entry = pokemon_sound
 

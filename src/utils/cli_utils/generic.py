@@ -1,4 +1,4 @@
-from constants.char_constants import TextSymbols
+from constants.text_constants import TextSymbols
 
 
 def bool_square(inp: bool = False) -> str:

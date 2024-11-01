@@ -4,6 +4,7 @@ from pathlib import Path
 from tkinter import filedialog
 from typing import Any, Iterable, Literal
 
+from constants.text_constants import DefaultNames, HelperText
 from utils.cli_utils.generic import line_header
 from utils.cli_utils.keypress import clear_line, positive_int_choice
 
@@ -14,7 +15,7 @@ from classes.pack import Pack
 from classes.pokemon import Pokemon
 from classes.pokemon_form import PokemonForm
 
-from .choice_rules import DualChoise_Simple, DualChoise_Risky
+from .choice_rules import DualChoise_Risky, DualChoise_Simple
 
 
 class Combiner:
@@ -37,6 +38,8 @@ class Combiner:
 
         self._process_mods = False
         self._allow_risky_rules = True
+
+        self.__helper_message_displayed = False
 
     def run(self) -> None:
         self._prep_output_path()
@@ -414,8 +417,8 @@ class Combiner:
     def _dual_choice_against_base_add(
         self, holder: dict[str, Pokemon], other_key: str, mod_key: str = "BASE"
     ) -> tuple[str, Literal["R"]] | tuple[None, None]:
-        b_patch = holder[mod_key].forms["base_form"].comp_stamp
-        o_patch = holder[other_key].forms["base_form"].comp_stamp
+        b_patch = holder[mod_key].forms[DefaultNames.BASE_FORM].comp_stamp
+        o_patch = holder[other_key].forms[DefaultNames.BASE_FORM].comp_stamp
 
         if ((not b_patch[0]) and o_patch[0]) and (
             ((not b_patch[3]) and o_patch[3])
@@ -428,8 +431,8 @@ class Combiner:
     def _dual_choice_against_base_add_spawn(
         self, holder: dict[str, Pokemon], other_key: str, mod_key: str = "BASE"
     ) -> tuple[str, Literal["R"]] | tuple[None, None]:
-        fb = holder[mod_key].forms["base_form"]
-        fo = holder[other_key].forms["base_form"]
+        fb = holder[mod_key].forms[DefaultNames.BASE_FORM]
+        fo = holder[other_key].forms[DefaultNames.BASE_FORM]
 
         if (
             (not fb.has_spawn())
@@ -471,12 +474,12 @@ class Combiner:
                 p
                 for p in holder.values()
                 if (p.parent_pack.is_base or p.parent_pack.is_mod)
-            ][0].forms["base_form"]
+            ][0].forms[DefaultNames.BASE_FORM]
             fo: PokemonForm = [
                 p
                 for p in holder.values()
                 if not (p.parent_pack.is_base or p.parent_pack.is_mod)
-            ][0].forms["base_form"]
+            ][0].forms[DefaultNames.BASE_FORM]
 
             for _check in [
                 DualChoise_Simple._dual_choice_mod_and_remodel,
@@ -509,6 +512,12 @@ class Combiner:
         print("=" * 25)
 
     def _choose_pack(self, holder: dict[str, Pokemon], number: int, name: str):
+        if not self.__helper_message_displayed:
+            print(HelperText.AUTO_MANUAL_CHOISE)
+            _ = input("Press [Enter] to continue..")
+            print(clear_line, end="")
+            self.__helper_message_displayed = True
+
         print(f"#{number} - {name}")
 
         keys = list(holder.keys())
@@ -525,7 +534,7 @@ class Combiner:
         while True:
             k_in = positive_int_choice(
                 max_ch=(len(keys) + 1),
-                text="Pack choice:   [#].Pack  [E]xit",
+                text="Pack choice:   [Num.#] Pack",
             )
             if k_in:
                 break

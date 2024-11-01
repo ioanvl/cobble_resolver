@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, LiteralString, Optional
 
-from constants.char_constants import TextSymbols
+from constants.text_constants import TextSymbols, DefaultNames
 from utils.cli_utils.generic import bool_square
 
 from classes.base_classes import bcfo
@@ -33,14 +33,14 @@ class PokemonForm:
     def __repr__(self) -> str:
         s: str = self._st()
         ret: str = ""
-        if self.name != "base_form":
+        if self.name != DefaultNames.BASE_FORM:
             ret += f"{s} {self.name if self.name else self.aspects}\n"
         ret += f"{s} "
         ret += f"DATA: Spawn:{bool_square(len(self.spawn_pool))} | "
         ret += f"S:{self.__square_atr(self.species)}"
         ret += f"/{self.__square_atr(self.species_additions)}:SA "
 
-        if self.name == "base_form" and (self.parent_pokemon is not None):
+        if self.name == DefaultNames.BASE_FORM and (self.parent_pokemon is not None):
             ret += (
                 f"| {TextSymbols.music_symbol}:{bool_square(self.parent_pack.sounds)} "
             )
