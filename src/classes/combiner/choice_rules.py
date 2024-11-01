@@ -26,7 +26,7 @@ class DualChoise_Simple:
 
     @staticmethod
     def _dual_choice_mod_remodel(
-        self, pok_mod: PokemonForm, pok_other: PokemonForm
+        pok_mod: PokemonForm, pok_other: PokemonForm
     ) -> tuple[str, Literal["G5c-R"]] | tuple[None, None]:
         if pok_mod.is_complete() and (
             (not pok_other.has_spawn())
@@ -37,7 +37,7 @@ class DualChoise_Simple:
 
     @staticmethod
     def _dual_choice_card(
-        self, pok_mod: PokemonForm, pok_other: PokemonForm
+        pok_mod: PokemonForm, pok_other: PokemonForm
     ) -> tuple[str, Literal["CARD"]] | tuple[None, None]:
         if (
             pok_mod.is_complete()
@@ -51,7 +51,7 @@ class DualChoise_Simple:
 
     @staticmethod
     def _dual_choice_card_2(
-        self, pok_mod: PokemonForm, pok_other: PokemonForm
+        pok_mod: PokemonForm, pok_other: PokemonForm
     ) -> tuple[str, Literal["CARD2"]] | tuple[None, None]:
         if (
             pok_mod.parent_pack.is_base
@@ -64,7 +64,7 @@ class DualChoise_Simple:
 
     @staticmethod
     def _dual_choice_card_3(
-        self, pok_mod: PokemonForm, pok_other: PokemonForm
+        pok_mod: PokemonForm, pok_other: PokemonForm
     ) -> tuple[str, Literal["CARD3"]] | tuple[None, None]:
         if (
             pok_mod.parent_pack.is_base
