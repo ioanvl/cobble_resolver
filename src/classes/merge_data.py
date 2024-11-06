@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 from constants.runtime_const import gcr_settings
 from utils.get_resource import load_json_from_path
@@ -11,6 +11,7 @@ from utils.text_utils import bcolors, next_candidate_name
 
 if TYPE_CHECKING:
     from classes.pokemon import Pokemon
+    from classes.combiner.combiner import Combiner
 
 
 class MergeST(Enum):
@@ -40,9 +41,38 @@ class MergeData:
     species_additions: dict = field(default_factory=dict)
 
 
+@dataclass
+class mOutputW:
+    _common_base: dict
+    extracted_sas: dict[Path, dict] = field(default_factory=dict)
+
+
+@dataclass
+class mOutputZ:
+    _common_base_addition: dict
+    choice_sas: dict[Path, dict] = field(default_factory=dict)
+
+
 class Merger:
+    def __init__(self, attached_combiner: Optional["Combiner"] = None):
+        self._attached_combiner: Optional["Combiner"] = attached_combiner
+
+    def process(self, attached_combiner: Optional["Combiner"] = None):
+        self._attached_combiner = attached_combiner or self._attached_combiner
+        if self._attached_combiner is None:
+            raise RuntimeError
+        self._process()
+
+    def _process(self):
+        _to_check: set[str] = self._attached_combiner.defined_pokemon.copy()
+        _checked: set[str] = set()
+
+        _to_check = self._attached_combiner._sort_pokemon_str(inp=_to_check)
+
     @staticmethod
-    def merge_spawns(mons: list[Pokemon], _process_mods: bool = False) -> dict[str, Any]:
+    def merge_spawns(
+        mons: list[Pokemon], _process_mods: bool = gcr_settings.PROCESS_MODS
+    ) -> dict[str, Any]:
         outp = {
             "enabled": True,
             "neededInstalledMods": set(),
@@ -117,7 +147,7 @@ class Merger:
         return outp
 
     @staticmethod
-    def merge_data(mons: list[Pokemon], _process_mods: bool = False):
+    def merge_data(mons: list[Pokemon], _process_mods: bool = gcr_settings.PROCESS_MODS):
         _proc_mons = [
             m
             for m in mons
@@ -136,5 +166,84 @@ class Merger:
         raise NotImplementedError
 
     @staticmethod
-    def extract_sas(base_mon: Pokemon, pack_mons: list[Pokemon]):
-        raise NotImplementedError
+    def dblyou(
+        inpt_species: dict[Path, dict], internal_name: str | None = None
+    ) -> mOutputW:
+        """Out of multiple species extract a common -BASE-"""
+
+        _all_keys = set()
+        for species in inpt_species.values():
+            _all_keys.update(list(species.keys()))
+
+        _common_base = dict()
+
+        for c_key in _all_keys:
+            if (
+                len(
+                    (x := set([sp[c_key] for sp in inpt_species.values() if c_key in sp]))
+                )  # this is "loose" - a key can pass if it exists in a single species
+                == 1
+            ) and (
+                all([(c_key in sp) for sp in inpt_species.values()])
+                or (not gcr_settings.SPECIES_STRICT_KEY_MATCH)
+            ):
+                val = x[0]
+                _common_base[c_key] = val
+
+        outp = mOutputW(
+            _common_base=_common_base,
+            extracted_sas=Merger.ex(
+                common_base=_common_base,
+                inpt_species=inpt_species,
+                internal_name=internal_name,
+            ),
+        )
+
+        return outp
+
+    @staticmethod
+    def ex(
+        common_base: dict,
+        inpt_species: dict[Path, dict],
+        internal_name: str | None = None,
+    ) -> dict[Path, dict]:
+        """From BASE and species, extract -additions-"""
+
+        outp: dict[Path, dict] = dict()
+
+        for sp_key, species in inpt_species:
+            outp[sp_key] = dict()
+            for c_key in common_base:
+                if c_key in species:  # keys from base, that differ
+                    if species[c_key] != common_base[c_key]:
+                        outp[sp_key][c_key] = species[c_key]
+            for c_key in species:  # keys from addition not in base
+                if c_key not in common_base:  # that'd be an asshole to debug
+                    outp[sp_key][c_key] = species[c_key]
+            if outp[sp_key]:
+                if ("target" not in outp[sp_key]) and (internal_name is not None):
+                    outp[sp_key]["target"] = f"cobblemon:{internal_name}"
+        return outp
+
+    @staticmethod
+    def why(
+        common_base: dict,
+        inpt_additions: dict[Path, dict],
+    ) -> dict[Path, dict]:
+        """From BASE and additions, cleanup the -additions-"""
+        # aka remove common keys
+        outp: dict[Path, dict] = dict()
+
+        for sp_key, species in inpt_additions:
+            outp[sp_key] = dict()
+            for c_key in species:
+                if not (
+                    (c_key in common_base) and (common_base[c_key] == species[c_key])
+                ):
+                    outp[sp_key][c_key] = species[c_key]
+        return outp
+
+    @staticmethod
+    def zet(inpt_additions: dict[Path, dict]):
+        """From multiple additions extract a -common- and -diffs-"""
+        return Merger.dblyou(inpt_species=inpt_additions)  # ....right?

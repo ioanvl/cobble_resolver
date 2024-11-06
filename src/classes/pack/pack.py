@@ -22,12 +22,13 @@ from classes.pokemon import Pokemon
 from classes.pokemon_form import PokemonForm, ResolverEntry
 from classes.sounds import SoundPack
 from constants.generic import default_animation_types
-from constants.runtime_const import DEBUG
+from constants.runtime_const import DEBUG, gcr_settings
 from constants.text_constants import DefaultNames, TextSymbols
 from utils.cli_utils.generic import bool_square
 from utils.cli_utils.keypress import clear_line
 from utils.directory_utils import clear_empty_dir
 from utils.safe_parse_deco import safe_parse_per_file
+from utils.text_utils import next_candidate_name
 
 if TYPE_CHECKING:
     from classes.combiner import Combiner
@@ -211,6 +212,30 @@ class Pack:
                     continue  # appears here and fucks things up
                 np = output_path / p.relative_to(self.folder_location)
                 np.parent.mkdir(parents=True, exist_ok=True)
+
+                if np.exists() and (
+                    (
+                        (
+                            (np.parent == "species_additions")
+                            or (np.parent.parent == "species_additions")
+                        )
+                        and gcr_settings.KEEP_DUPLICATE_SAS_ON_MOVE
+                    )
+                    or (
+                        (
+                            (np.parent == "spawn_pool_world")
+                            or (np.parent.parent == "spawn_pool_world")
+                        )
+                        and gcr_settings.KEEP_DUPLICATE_SPAWNS_ON_MOVE
+                    )
+                ):
+                    while True:
+                        candidate_name = np.stem
+                        candidate_name = next_candidate_name(candidate_name)
+                        if not (
+                            np := (np.parent / f"{candidate_name}.{np.suffix}")
+                        ).exists():
+                            break
 
                 shutil.move(p, np)
                 c += 1

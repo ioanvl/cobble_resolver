@@ -14,7 +14,14 @@ class CRSettings:
     POKEDEX_FIX: bool = True
     OP_MODE: CrOpType = CrOpType.PICK
 
-    MERGE_MOVES: bool = False
+    PROCESS_MODS: bool = False
+
+    MERGE_POKEMON_MOVES: bool = False
+
+    KEEP_DUPLICATE_SAS_ON_MOVE: bool = True
+    KEEP_DUPLICATE_SPAWNS_ON_MOVE: bool = True
+
+    SPECIES_STRICT_KEY_MATCH: bool = False
 
 
 gcr_settings = CRSettings()
