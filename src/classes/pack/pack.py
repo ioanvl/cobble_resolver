@@ -8,14 +8,6 @@ from json import JSONDecodeError
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from constants.generic import default_animation_types
-from constants.runtime_const import DEBUG
-from constants.text_constants import DefaultNames, TextSymbols
-from utils.cli_utils.generic import bool_square
-from utils.cli_utils.keypress import clear_line
-from utils.directory_utils import clear_empty_dir
-from utils.safe_parse_deco import safe_parse_per_file
-
 from classes.base_classes import (
     Feature,
     FeatureAssignment,
@@ -29,6 +21,13 @@ from classes.pack.poser_parser import PoserResolver
 from classes.pokemon import Pokemon
 from classes.pokemon_form import PokemonForm, ResolverEntry
 from classes.sounds import SoundPack
+from constants.generic import default_animation_types
+from constants.runtime_const import DEBUG
+from constants.text_constants import DefaultNames, TextSymbols
+from utils.cli_utils.generic import bool_square
+from utils.cli_utils.keypress import clear_line
+from utils.directory_utils import clear_empty_dir
+from utils.safe_parse_deco import safe_parse_per_file
 
 if TYPE_CHECKING:
     from classes.combiner import Combiner
@@ -774,9 +773,7 @@ class Pack:
             self.pokemon[pok_name] = Pokemon(
                 internal_name=pok_name,
                 dex_id=-1,
-                forms={
-                    DefaultNames.BASE_FORM: PokemonForm(name=DefaultNames.BASE_FORM)
-                },
+                forms={DefaultNames.BASE_FORM: PokemonForm(name=DefaultNames.BASE_FORM)},
             )
 
         order = data.get("order", -1)
@@ -808,9 +805,9 @@ class Pack:
                     form.resolver_assignments.add(order)
                     flag = True
         if not flag:
-            self.pokemon[pok_name].forms[
-                DefaultNames.BASE_FORM
-            ].resolver_assignments.add(order)
+            self.pokemon[pok_name].forms[DefaultNames.BASE_FORM].resolver_assignments.add(
+                order
+            )
 
         self.pokemon[pok_name].resolvers[order] = new_resolver_entry
 
@@ -884,9 +881,7 @@ class Pack:
     # ------------------------------------------------------------
 
     @safe_parse_per_file(component_attr="animations", DEBUG=DEBUG)
-    def _get_looks_animations(
-        self, input_file_path: Path, data: dict
-    ) -> None:  # STEP 3
+    def _get_looks_animations(self, input_file_path: Path, data: dict) -> None:  # STEP 3
         anims = data.get("animations", dict())
         if not isinstance(anims, dict):
             return
@@ -936,9 +931,7 @@ class Pack:
                             )
                     if "animations" in data:
                         requested.update(
-                            PoserResolver._parse_poser_animation_entry(
-                                data["animations"]
-                            )
+                            PoserResolver._parse_poser_animation_entry(data["animations"])
                         )
 
                     for _, pose_data in (data.get("poses", dict())).items():

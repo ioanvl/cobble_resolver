@@ -4,10 +4,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, LiteralString, Optional
 
-from constants.text_constants import TextSymbols, DefaultNames
-from utils.cli_utils.generic import bool_square
-
 from classes.base_classes import bcfo
+from classes.merge_data import MergeStatus, merge_color_assignment
+from constants.text_constants import DefaultNames, TextSymbols
+from utils.cli_utils.generic import bool_square
+from utils.text_utils import cprint
 
 if TYPE_CHECKING:
     from classes.pack import Pack
@@ -30,28 +31,47 @@ class PokemonForm:
     parent_pokemon: Optional["Pokemon"] = None
     parent_pack: Optional["Pack"] = None
 
+    merge_status: Optional[MergeStatus] = None
+
     def __repr__(self) -> str:
         s: str = self._st()
         ret: str = ""
         if self.name != DefaultNames.BASE_FORM:
             ret += f"{s} {self.name if self.name else self.aspects}\n"
         ret += f"{s} "
-        ret += f"DATA: Spawn:{bool_square(len(self.spawn_pool))} | "
-        ret += f"S:{self.__square_atr(self.species)}"
-        ret += f"/{self.__square_atr(self.species_additions)}:SA "
+        ret += "DATA: "
+        ret += cprint(
+            f"Spawn:{bool_square(self.spawn_pool)} ",
+            color=merge_color_assignment[
+                getattr(self.merge_status, "spawn_pool").value if self.merge_status else 0
+            ],
+        )
+        ret += "| "
+        ret += cprint(
+            f"S:{bool_square(self.species)}",
+            color=merge_color_assignment[
+                getattr(self.merge_status, "species").value if self.merge_status else 0
+            ],
+        )
+        ret += "/"
+        ret += cprint(
+            f"{bool_square(self.species_additions)}:SA ",
+            color=merge_color_assignment[
+                getattr(self.merge_status, "species_additions").value
+                if self.merge_status
+                else 0
+            ],
+        )
 
         if self.name == DefaultNames.BASE_FORM and (self.parent_pokemon is not None):
-            ret += (
-                f"| {TextSymbols.music_symbol}:{bool_square(self.parent_pack.sounds)} "
-            )
+            ret += f"| {TextSymbols.music_symbol}:{bool_square(self.parent_pack.sounds)} "
             if self.parent_pokemon.sa_transfers_received:
                 ret += " +SA"
 
             if self.parent_pokemon.requested:
                 ret += " +Req"
                 if req_diff := (
-                    self.parent_pokemon.requested
-                    - self.parent_pokemon.request_transfered
+                    self.parent_pokemon.requested - self.parent_pokemon.request_transfered
                 ):
                     ret += f"[{req_diff}]"
                     if self.parent_pokemon._is_actively_requested():
@@ -152,11 +172,13 @@ class PokemonForm:
             return bool(
                 self.parent_pokemon.requested
                 and (
-                    self.parent_pokemon.requested
-                    - self.parent_pokemon.request_transfered
+                    self.parent_pokemon.requested - self.parent_pokemon.request_transfered
                 )
             )
         return False
+
+    def is_relevant_form(self, name: str) -> bool:
+        return (self.name == name) or (name in self.aspects)
 
     def _st(self) -> LiteralString:
         return f"{' '*(3 if (self.name != 'base_form') else 0)}|"

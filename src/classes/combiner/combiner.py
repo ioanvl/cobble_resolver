@@ -3,10 +3,6 @@ import shutil
 from pathlib import Path
 from tkinter import filedialog
 from typing import Any, Iterable, Literal
-from utils.get_resource import get_resource_path
-from constants.text_constants import DefaultNames, HelperText
-from utils.cli_utils.generic import line_header
-from utils.cli_utils.keypress import clear_line, positive_int_choice
 
 from classes.base_classes import (
     LangResultEntry,
@@ -14,6 +10,10 @@ from classes.base_classes import (
 from classes.pack import Pack
 from classes.pokemon import Pokemon
 from classes.pokemon_form import PokemonForm
+from constants.text_constants import DefaultNames, HelperText
+from utils.cli_utils.generic import line_header
+from utils.cli_utils.keypress import clear_line, positive_int_choice
+from utils.get_resource import get_resource_path
 
 from .choice_rules import DualChoise_Risky, DualChoise_Simple
 
@@ -327,9 +327,7 @@ class Combiner:
             holder, num, name = self._make_pack_holder(p_name)
             self._choose_pack(holder=holder, number=num, name=name)
 
-    def _make_pack_holder(
-        self, pokemon_name: str
-    ) -> tuple[dict[str, Pokemon], int, str]:
+    def _make_pack_holder(self, pokemon_name: str) -> tuple[dict[str, Pokemon], int, str]:
         holder: dict[str, Pokemon] = dict()
 
         d_num: int = 0
@@ -454,10 +452,7 @@ class Combiner:
     ) -> tuple[str, Literal["I"]] | tuple[None, None]:
         if (
             all(
-                [
-                    (p.parent_pack.is_base or p.parent_pack.is_mod)
-                    for p in holder.values()
-                ]
+                [(p.parent_pack.is_base or p.parent_pack.is_mod) for p in holder.values()]
             )
         ) and (not self._process_mods):
             return (list(holder.keys())[0], "I")
@@ -468,10 +463,7 @@ class Combiner:
     ) -> tuple[str, str] | tuple[None, None]:
         if (
             sum(
-                [
-                    (p.parent_pack.is_base or p.parent_pack.is_mod)
-                    for p in holder.values()
-                ]
+                [(p.parent_pack.is_base or p.parent_pack.is_mod) for p in holder.values()]
             )
             == 1
         ):
