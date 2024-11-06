@@ -8,8 +8,8 @@ from classes.combiner import Combiner
 
 # TODO ...merging?
 
-RUN_TYPE = 2
-SELECTED_PACK = [1, 3, 7]
+RUN_TYPE = 0
+SELECTED_PACK = [2]
 
 if __name__ == "__main__":
     if RUN_TYPE == 0:

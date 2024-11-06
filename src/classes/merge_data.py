@@ -5,6 +5,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from constants.runtime_const import gcr_settings
 from utils.get_resource import load_json_from_path
 from utils.text_utils import bcolors, next_candidate_name
 

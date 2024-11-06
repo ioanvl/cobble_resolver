@@ -10,6 +10,7 @@ from classes.base_classes import (
 from classes.pack import Pack
 from classes.pokemon import Pokemon
 from classes.pokemon_form import PokemonForm
+from constants.runtime_const import gcr_settings
 from constants.text_constants import DefaultNames, HelperText
 from utils.cli_utils.generic import line_header
 from utils.cli_utils.keypress import clear_line, positive_int_choice
@@ -63,7 +64,8 @@ class Combiner:
         for pack in self.packs:
             if pack.is_base or (pack.is_mod and (not self._process_mods)):
                 continue
-            pack._dirty_pokedex_fix()
+            if gcr_settings.POKEDEX_FIX:
+                pack._dirty_pokedex_fix()
             pack.export(
                 export_path=self.output_pack_path,
                 move_leftovers=self.output_pack_path.parent,
