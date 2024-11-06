@@ -1,6 +1,12 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from classes.pokemon import Pokemon
 
 
 @dataclass
@@ -47,3 +53,10 @@ class LangEntry:
 class LangResultEntry:
     name: str
     data: dict
+
+
+@dataclass
+class PackHolder:
+    mons: dict[str, "Pokemon"]
+    dex_num: int
+    name: str

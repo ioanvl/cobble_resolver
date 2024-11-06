@@ -4,9 +4,7 @@ from pathlib import Path
 from tkinter import filedialog
 from typing import Any, Iterable, Literal
 
-from classes.base_classes import (
-    LangResultEntry,
-)
+from classes.base_classes import LangResultEntry, PackHolder
 from classes.pack import Pack
 from classes.pokemon import Pokemon
 from classes.pokemon_form import PokemonForm
@@ -260,11 +258,15 @@ class Combiner:
 
         for p_name in _to_check:
             if sum([1 for p in self.packs if (p_name in p.pokemon)]) == 1:
-                holder, num, name = self._make_pack_holder(p_name)
-                pack, sel_type = self._single_simple_add(holder=holder)
-                holder[pack].select()
+                ph: PackHolder = self._make_pack_holder(pokemon_name=p_name)
+
+                pack, sel_type = self._single_simple_add(holder=ph.mons)
+                ph.mons[pack].select()
                 self._print_pack_choise(
-                    number=num, name=name, selected_pack=pack, selection_type=sel_type
+                    number=ph.dex_num,
+                    name=ph.name,
+                    selected_pack=pack,
+                    selection_type=sel_type,
                 )
                 _checked.add(p_name)
         for i in _checked:
@@ -283,21 +285,21 @@ class Combiner:
             for p_name in _to_check:
                 if sum([1 for p in self.packs if (p_name in p.pokemon)]) == 2:
                     _num_flag = True
-                    holder, num, name = self._make_pack_holder(p_name)
+                    ph: PackHolder = self._make_pack_holder(pokemon_name=p_name)
 
                     flag = False
                     selected_key: str = ""
                     selection_type: str = ""
                     for check in _avail_checks:
                         if not flag:
-                            selected_key, selection_type = check(holder=holder)
+                            selected_key, selection_type = check(holder=ph.mons)
                             flag: bool = selected_key is not None
                     if flag:
                         _checked.add(p_name)
-                        holder[selected_key].select()
+                        ph.mons[selected_key].select()
                         self._print_pack_choise(
-                            number=num,
-                            name=name,
+                            number=ph.dex_num,
+                            name=ph.name,
                             selected_pack=selected_key,
                             selection_type=selection_type,
                         )
@@ -311,9 +313,9 @@ class Combiner:
                 if (
                     sum([1 for p in self.packs if (p_name in p.pokemon)]) == 2
                 ):  # TODO fuckin optimize this, for the love of god
-                    holder, num, name = self._make_pack_holder(p_name)
-
-                    self._choose_pack(holder=holder, number=num, name=name)
+                    self._choose_pack(
+                        pack_holder=self._make_pack_holder(pokemon_name=p_name)
+                    )
                     _to_check.remove(
                         p_name
                     )  # TODO IS this dangerous? editing but also breaking
@@ -326,10 +328,9 @@ class Combiner:
         _to_check = self._sort_pokemon_str(inp=_to_check)
 
         for p_name in _to_check:
-            holder, num, name = self._make_pack_holder(p_name)
-            self._choose_pack(holder=holder, number=num, name=name)
+            self._choose_pack(pack_holder=self._make_pack_holder(pokemon_name=p_name))
 
-    def _make_pack_holder(self, pokemon_name: str) -> tuple[dict[str, Pokemon], int, str]:
+    def _make_pack_holder(self, pokemon_name: str) -> PackHolder:
         holder: dict[str, Pokemon] = dict()
 
         d_num: int = 0
@@ -346,7 +347,7 @@ class Combiner:
                 list(holder.values())[0].name
                 or f"[{list(holder.values())[0].internal_name}]"
             )
-        return holder, d_num, d_name
+        return PackHolder(mons=holder, dex_num=d_num, name=d_name)
 
     def _resolution_core(self) -> None:
         line_header("RESOLVING")
@@ -354,7 +355,7 @@ class Combiner:
             self._resolution_pokemon(pokemon_name=pok_name)
 
     def _resolution_pokemon(self, pokemon_name: str) -> None:
-        temp_holder, d_num, d_name = self._make_pack_holder(pokemon_name=pokemon_name)
+        ph: PackHolder = self._make_pack_holder(pokemon_name=pokemon_name)
 
         flag = False
         selected_key: str = ""
@@ -363,18 +364,18 @@ class Combiner:
         checks = [self._single_simple_add, self._dual_choice]
         for check in checks:
             if not flag:
-                selected_key, selection_type = check(holder=temp_holder)
+                selected_key, selection_type = check(holder=ph.mons)
                 flag = selected_key is not None
 
         if flag:
             self._print_pack_choise(
-                number=d_num,
-                name=d_name,
+                number=ph.dex_num,
+                name=ph.name,
                 selected_pack=selected_key,
                 selection_type=selection_type,
             )
         else:
-            self._choose_pack(holder=temp_holder, number=d_num, name=d_name)
+            self._choose_pack(pack_holder=ph)
 
     def _single_simple_add(
         self, holder: dict[str, Pokemon]
@@ -510,20 +511,22 @@ class Combiner:
 
         print("=" * 25)
 
-    def _choose_pack(self, holder: dict[str, Pokemon], number: int, name: str):
+    def _choose_pack(self, pack_holder: PackHolder):
+        mons: dict[str, Pokemon] = pack_holder.mons
+
         if not self.__helper_message_displayed:
             print(HelperText.AUTO_MANUAL_CHOISE)
             _ = input("Press [Enter] to continue..")
             print(clear_line, end="")
             self.__helper_message_displayed = True
 
-        print(f"#{number} - {name}")
+        print(f"#{pack_holder.dex_num} - {pack_holder.name}")
 
-        keys = list(holder.keys())
+        keys = list(mons.keys())
 
         for i, k in enumerate(keys):
             pack_name = k
-            p = holder[pack_name]
+            p = mons[pack_name]
             outp = repr(p)
             out_parts = outp.split("\n")
             out_parts[0] = f"{i+1}. {pack_name}"
@@ -541,7 +544,7 @@ class Combiner:
                 print(f"\033[A\r{' '*40}\r", end="")
 
         selected_key = keys[k_in - 1]
-        holder[selected_key].select()
+        mons[selected_key].select()
         print(f"\033[A\r{' '*40}\r", end="")
         print(f"- {k_in}. [{selected_key}]")
         print("=" * 25)
