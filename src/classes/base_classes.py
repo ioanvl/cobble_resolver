@@ -60,3 +60,14 @@ class PackHolder:
     mons: dict[str, "Pokemon"]
     dex_num: int
     name: str
+    internal_name: str | None = None
+
+    def __len__(self) -> int:
+        return len(self.mons)
+
+    def has_base(self):
+        for mon in self.mons.values():
+            if mon.parent_pack is not None:
+                if mon.parent_pack.is_base:
+                    return True
+        return False

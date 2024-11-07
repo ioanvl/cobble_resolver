@@ -5,13 +5,16 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
+from classes.base_classes import PackHolder
 from constants.runtime_const import gcr_settings
+from constants.text_constants import DefaultNames
 from utils.get_resource import load_json_from_path
 from utils.text_utils import bcolors, next_candidate_name
 
 if TYPE_CHECKING:
-    from classes.pokemon import Pokemon
     from classes.combiner.combiner import Combiner
+    from classes.pokemon import Pokemon
+    from classes.pokemon_form import PokemonForm
 
 
 class MergeST(Enum):
@@ -68,6 +71,35 @@ class Merger:
         _checked: set[str] = set()
 
         _to_check = self._attached_combiner._sort_pokemon_str(inp=_to_check)
+
+        for pok_name in _to_check:
+            ph: PackHolder = self._attached_combiner._make_pack_holder(
+                pokemon_name=pok_name
+            )
+
+            if len(ph) == 1:
+                if ph.has_base():
+                    continue
+                else:
+                    pack_name = list(ph.mons.keys())[0]
+                    ph.mons[pack_name].select()
+                    self._attached_combiner._print_pack_choise(
+                        number=ph.dex_num,
+                        name=ph.name,
+                        selected_pack=pack_name,
+                        selection_type="ADD",
+                    )
+                    _checked.add(pok_name)
+            else:
+                Merger.merge(holder=ph)
+
+    @staticmethod
+    def merge(holder: PackHolder, _process_mods: bool = gcr_settings.PROCESS_MODS):
+        merged_spawn: dict[str, Any] = Merger.merge_spawns(
+            mons=list(holder.mons.values()), _process_mods=_process_mods
+        )
+
+        Merger.merge_data(holder=holder, _process_mods=_process_mods)
 
     @staticmethod
     def merge_spawns(
@@ -147,7 +179,8 @@ class Merger:
         return outp
 
     @staticmethod
-    def merge_data(mons: list[Pokemon], _process_mods: bool = gcr_settings.PROCESS_MODS):
+    def merge_data(holder: PackHolder, _process_mods: bool = gcr_settings.PROCESS_MODS):
+        mons = list(holder.mons.values())
         _proc_mons = [
             m
             for m in mons
@@ -155,15 +188,34 @@ class Merger:
                 (m.parent_pack.is_mod and (not _process_mods)) or m.parent_pack.is_base
             )
         ]
+        if not _proc_mons:
+            return
 
-        _base = None
+        _base: Optional["Pokemon"] = None
         if x := [m for m in mons if m.parent_pack.is_base]:
             _base = x[0]
 
         if _base is not None:
-            Merger.extract_sas(base_mon=_base, pack_mons=_proc_mons)
+            path_to_species_index: dict[Path, dict] = dict()
+            for mon in _proc_mons:
+                for form in mon.forms.values():
+                    spec = form.species
+                    if spec is None:
+                        continue
+                    if spec.file_path in path_to_species_index:
+                        continue
+                    else:
+                        path_to_species_index[spec.file_path] = spec.source
+            if path_to_species_index:
+                extracted_path_to_species = Merger.ex(
+                    common_base=_base.forms[DefaultNames.BASE_FORM].species.source,
+                    inpt_species=path_to_species_index,
+                    internal_name=holder.internal_name,
+                )
 
-        raise NotImplementedError
+                pass
+
+        # raise NotImplementedError
 
     @staticmethod
     def dblyou(
@@ -211,7 +263,7 @@ class Merger:
 
         outp: dict[Path, dict] = dict()
 
-        for sp_key, species in inpt_species:
+        for sp_key, species in inpt_species.items():
             outp[sp_key] = dict()
             for c_key in common_base:
                 if c_key in species:  # keys from base, that differ
@@ -220,10 +272,19 @@ class Merger:
             for c_key in species:  # keys from addition not in base
                 if c_key not in common_base:  # that'd be an asshole to debug
                     outp[sp_key][c_key] = species[c_key]
-            if outp[sp_key]:
-                if ("target" not in outp[sp_key]) and (internal_name is not None):
-                    outp[sp_key]["target"] = f"cobblemon:{internal_name}"
+            # if outp[sp_key]:
+            #     if ("target" not in outp[sp_key]) and (internal_name is not None):
+            #         outp[sp_key]["target"] = f"cobblemon:{internal_name}"
         return outp
+
+    @staticmethod
+    def extract_forms_against_base_pok(
+        base_pok_forms_: dict[str, dict], pack_forms: dict[Path, dict[str, dict]]
+    ):
+        raise NotImplementedError
+    
+    @staticmethod
+    def extract_evos_against_base_pok
 
     @staticmethod
     def why(

@@ -772,6 +772,53 @@ class Pack:
                     set(self.pokemon[pok_name].forms[DefaultNames.BASE_FORM].spawn_pool)
                 )
 
+    @staticmethod
+    def _extract_name_and_aspect(
+        full_pokemon_string: str, available_features: dict[str, Feature] = dict()
+    ) -> tuple[str, str]:
+        pok_parts: list[str] = full_pokemon_string.split(" ")
+        pok_name: str = pok_parts[0]
+
+        aspect: str = ""
+        if len(pok_parts) > 1:  # try to find an aspect
+            feat_parts: list[str] = pok_parts[1].split("=")
+
+            if len(feat_parts) > 1:  # choice
+                feat_name: str = feat_parts[0]
+                feat_choice: str = feat_parts[1]
+
+                if feat_choice.lower() in [
+                    "true",
+                    "false",
+                ]:  # fix for some dumb stuff
+                    if feat_choice.lower() == "true":
+                        aspect = feat_parts[0]
+                elif feat_name.lower() == "form":  # fix other dumb stuff
+                    aspect = feat_choice.lower()
+                else:
+                    selected = ""
+                    if feat_name in available_features:
+                        selected = available_features[feat_name].source["aspectFormat"]
+                    else:
+                        for val in available_features.values():
+                            if feat_name in val.keys:
+                                selected = val.source["aspectFormat"]
+                                break
+                    if selected:
+                        aspect = selected.replace("{{choice}}", feat_choice)
+            else:
+                aspect = feat_parts[0]
+        return pok_name, aspect
+
+    @staticmethod
+    def _match_aspect_to_form(aspect: str, pokemon: Pokemon) -> list[PokemonForm]:
+        outp: list[PokemonForm] = list()
+
+        for name, form in pokemon.forms.items():
+            if (aspect in form.aspects) or (aspect.lower() == name.lower()):
+                outp.append(form)
+        return outp
+
     # ------------------------------------------------------------
 
     def _get_looks_files(self) -> None:  # STEP 2

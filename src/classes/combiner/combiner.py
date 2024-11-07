@@ -5,6 +5,7 @@ from tkinter import filedialog
 from typing import Any, Iterable, Literal
 
 from classes.base_classes import LangResultEntry, PackHolder
+from classes.merge_data import Merger
 from classes.pack import Pack
 from classes.pokemon import Pokemon
 from classes.pokemon_form import PokemonForm
@@ -210,8 +211,11 @@ class Combiner:
 
         line_header("RESOLVING")
 
+        self._merge_v_a()
+
         # self._resolution_core()
-        self._resolution_greedy()
+
+        # self._resolution_greedy()
 
     def _sort_pokemon_str(self, inp: Iterable[str]):
         return sorted(
@@ -249,6 +253,10 @@ class Combiner:
                 ),
             ),
         )
+
+    def _merge_v_a(self):
+        merger = Merger(attached_combiner=self)
+        merger.process()
 
     def _resolution_greedy(self) -> None:
         _to_check: set[str] = self.defined_pokemon.copy()
@@ -347,7 +355,9 @@ class Combiner:
                 list(holder.values())[0].name
                 or f"[{list(holder.values())[0].internal_name}]"
             )
-        return PackHolder(mons=holder, dex_num=d_num, name=d_name)
+        return PackHolder(
+            mons=holder, dex_num=d_num, name=d_name, internal_name=pokemon_name
+        )
 
     def _resolution_core(self) -> None:
         line_header("RESOLVING")
