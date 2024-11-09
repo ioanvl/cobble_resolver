@@ -9,7 +9,7 @@ from constants.runtime_const import CrOpType, gcr_settings
 
 # TODO ...merging?
 
-RUN_TYPE = 0
+RUN_TYPE = 2
 SELECTED_PACK = [2]
 
 if __name__ == "__main__":

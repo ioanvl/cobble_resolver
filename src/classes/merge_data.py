@@ -218,7 +218,6 @@ class Merger:
                         _inp_species[form.species.file_path] = form.species.source
             _extracted_base = Merger._make_common_and_extract(
                 inpt_species=_inp_species,
-                internal_name=holder.internal_name,
                 inclussive=False,
             )
             extracted_path_to_species = Merger._extract_mons_data_from_common(
@@ -299,6 +298,8 @@ class Merger:
                     path_to_species_index[key] = Merger._merge_species_with_sas(
                         species=_temp,
                         species_additions=[form.species_additions.source],
+                        overwrite=True,
+                        include=True,
                     )
                 else:
                     if form.species is not None:
@@ -321,7 +322,6 @@ class Merger:
     @staticmethod
     def _make_common_and_extract(
         inpt_species: dict[Any, dict],
-        internal_name: str | None = None,
         inclussive: bool | None = None,
     ) -> mOutputW:  # inclusive etc - and then change the if bellow
         """Out of multiple species extract a common -BASE-"""
@@ -345,7 +345,6 @@ class Merger:
             extracted_sas=Merger._extract_against_common(
                 common_base=_common_base,
                 inpt_species=inpt_species,
-                internal_name=internal_name,
             ),
         )
 
@@ -355,7 +354,6 @@ class Merger:
     def _extract_against_common(
         common_base: dict,
         inpt_species: dict[Any, dict],
-        internal_name: str | None = None,
     ) -> dict[Any, dict]:
         """From BASE and species, extract -additions-"""
 
@@ -468,7 +466,7 @@ class Merger:
     def _merge_species_with_sas(
         species: dict,
         species_additions: list[dict],
-        overwrite: bool = False,
+        overwrite: bool = True,
         include: bool = True,
     ):
         _special_form_keys = ["forms", "evolutions"]
@@ -507,8 +505,8 @@ class Merger:
         _outp["evolutions"] = Merger._merge_evolutions_with_form_additions(
             species=species.get("evolutions", list()),
             species_additions=[sa.get("evolutions", list()) for sa in species_additions],
-            overwrite=overwrite,
-            include=include,
+            overwrite=False,
+            include=True,
         )
         # ------------------------------------------------------------------------
         return _outp
