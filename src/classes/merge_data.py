@@ -95,7 +95,6 @@ class Merger:
                     )
                     _checked.add(pok_name)
             else:
-                print(ph, end="")
                 Merger.merge(holder=ph)
 
     @staticmethod
@@ -103,6 +102,8 @@ class Merger:
         merged_spawn: dict[str, Any] = Merger.merge_spawns(
             mons=list(holder.mons.values()), _process_mods=_process_mods
         )
+
+        print(holder, end="\n\n")
 
         Merger.merge_data(holder=holder, _process_mods=_process_mods)
 
@@ -207,39 +208,32 @@ class Merger:
                 base_form=_base_form_species, mons=_proc_mons
             )
 
-            # path_to_species_index: dict[Path, dict] = dict()
-            # for mon in _proc_mons:
-            #     for form in mon.forms.values():
-            #         key = form.get_species_paths_key()
-
-            #         if (key in path_to_species_index) or (
-            #             (key[0] is None) and (key[1] is None)
-            #         ):
-            #             continue
-
-            #         if (key[0] is not None) and (key[1] is not None):
-            #             path_to_species_index[key] = Merger._merge_species_with_sas(
-            #                 species=form.species.source,
-            #                 species_additions=[form.species_additions.source],
-            #             )
-            #         else:
-            #             path_to_species_index[key] = (
-            #                 form.species.source
-            #                 if form.species is not None
-            #                 else form.species_additions.source
-            #             )
-
-            # if path_to_species_index:
-            #     extracted_path_to_species = Merger._extract_against_common(
-            #         common_base=_base_form_species,
-            #         inpt_species=path_to_species_index,
-            #         internal_name=holder.internal_name,
-            #     )
-
-            #   pass
+        else:
+            _inp_species = dict()
+            for mon in mons:
+                for form in mon.forms.values():
+                    if (form.species is not None) and (
+                        form.species.file_path not in _inp_species
+                    ):
+                        _inp_species[form.species.file_path] = form.species.source
+            _extracted_base = Merger._make_common_and_extract(
+                inpt_species=_inp_species,
+                internal_name=holder.internal_name,
+                inclussive=False,
+            )
+            extracted_path_to_species = Merger._extract_mons_data_from_common(
+                base_form=_extracted_base._common_base,
+                mons=_proc_mons,
+                pre_extracted_species=_extracted_base.extracted_sas,
+            )
+        pass
 
     @staticmethod
-    def _extract_mons_data_from_common(base_form: dict, mons: list["Pokemon"]):
+    def _extract_mons_data_from_common(
+        base_form: dict,
+        mons: list["Pokemon"],
+        pre_extracted_species: dict[Path, dict] | None = None,
+    ):
         path_to_species_index: dict[Path, dict] = dict()
         extracted_path_to_species = dict()
         for mon in mons:
@@ -252,16 +246,26 @@ class Merger:
                     continue
 
                 if (key[0] is not None) and (key[1] is not None):
+                    _temp = form.species.source
+                    if pre_extracted_species is not None:
+                        _key = form.species.file_path
+                        if _key in pre_extracted_species:
+                            _temp = pre_extracted_species[_key]
+
                     path_to_species_index[key] = Merger._merge_species_with_sas(
-                        species=form.species.source,
+                        species=_temp,
                         species_additions=[form.species_additions.source],
                     )
                 else:
-                    path_to_species_index[key] = (
-                        form.species.source
-                        if form.species is not None
-                        else form.species_additions.source
-                    )
+                    if form.species is not None:
+                        _temp = form.species.source
+                        if pre_extracted_species is not None:
+                            _key = form.species.file_path
+                            if _key in pre_extracted_species:
+                                _temp = pre_extracted_species[_key]
+                    else:
+                        _temp = form.species_additions.source
+                    path_to_species_index[key] = _temp
 
         if path_to_species_index:
             extracted_path_to_species = Merger._extract_against_common(

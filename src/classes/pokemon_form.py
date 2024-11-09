@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, LiteralString, Optional
 
 from classes.base_classes import bcfo
-from classes.merge_data import MergeStatus, merge_color_assignment
+from classes.merge_data import MergeStatus, merge_color_assignment, MergeST
 from constants.text_constants import DefaultNames, TextSymbols
 from utils.cli_utils.generic import bool_square
 from utils.text_utils import cprint
@@ -32,6 +32,44 @@ class PokemonForm:
     parent_pack: Optional["Pack"] = None
 
     merge_status: Optional[MergeStatus] = None
+
+    def is_fully_data_merged(self) -> bool:
+        if self.merge_status is not None:
+            return (
+                ((self.species is None) or (self.merge_status.species == MergeST.FULL))
+                and (
+                    (self.species_additions is None)
+                    or (self.merge_status.species_additions == MergeST.FULL)
+                )
+                and (
+                    bool(len(self.spawn_pool))
+                    or (self.merge_status.spawn_pool == MergeST.FULL)
+                )
+            )
+        return (
+            (self.species is None)
+            and (self.species_additions is None)
+            and (not self.spawn_pool)
+        )
+
+    def is_partially_data_merged(self) -> bool:
+        if self.merge_status is not None:
+            return (
+                ((self.species is None) or (self.merge_status.species != MergeST.NO))
+                or (
+                    (self.species_additions is None)
+                    or (self.merge_status.species_additions != MergeST.NO)
+                )
+                or (
+                    bool(len(self.spawn_pool))
+                    or (self.merge_status.spawn_pool != MergeST.NO)
+                )
+            )
+        return (
+            (self.species is None)
+            and (self.species_additions is None)
+            and (not self.spawn_pool)
+        )
 
     def __repr__(self) -> str:
         s: str = self._st()
@@ -76,15 +114,11 @@ class PokemonForm:
                     ret += f"[{req_diff}]"
                     if self.parent_pokemon._is_actively_requested():
                         ret += TextSymbols.left_arrow
-                    # else:
-                    #     if self.parent_pack and self.parent_pack.parent_combiner:
-                    #         if self.parent_pack.parent_combiner._is_selected(
-                    #             pokemon_name=self.parent_pokemon.internal_name
-                    #         ):
-                    #             ret += TextSymbols.x_symbol
-
                 else:
                     ret += f"[{TextSymbols.check_mark}]"
+
+        for res_ind in self.resolver_assignments:
+            ret += f"\n{s} {repr(self.parent_pokemon.resolvers[res_ind])}"
 
         ret += f"\n{s} {'-' * 10}"
         return ret

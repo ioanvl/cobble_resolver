@@ -113,6 +113,14 @@ class Pokemon:
                         res.add(pf.file_path)
         return res
 
+    def is_fully_data_merged(self):
+        return all([f.is_fully_data_merged() for f in self.forms.values()])
+
+    def is_partially_data_merged(self):
+        return any([f.is_fully_data_merged() for f in self.forms.values()]) or any(
+            [f.is_partially_data_merged() for f in self.forms.values()]
+        )
+
     def __repr__(self) -> str:
         ret: str = f"#{self.dex_id} - "
         if self.name is None:
@@ -123,14 +131,14 @@ class Pokemon:
         for f in self.forms.values():
             ret += "\n"
             pok_f: str = repr(f)
-            if al := len(f.resolver_assignments):
-                p_parts = pok_f.split("\n")
-                p_parts.append(p_parts[-1])
-                p_parts[-2] = (
-                    f"{f._st()} {repr(self.resolvers[list(f.resolver_assignments)[0]])}"
-                )
-                if al > 1:
-                    p_parts[-2] = p_parts[-2] + f"  +{al-1}"
-                pok_f = "\n".join(p_parts)
+            # if al := len(f.resolver_assignments):
+            #     p_parts = pok_f.split("\n")
+            #     p_parts.append(p_parts[-1])
+            #     p_parts[-2] = (
+            #         f"{f._st()} {repr(self.resolvers[list(f.resolver_assignments)[0]])}"
+            #     )
+            #     if al > 1:
+            #         p_parts[-2] = p_parts[-2] + f"  +{al-1}"
+            #     pok_f = "\n".join(p_parts)
             ret += pok_f
         return ret

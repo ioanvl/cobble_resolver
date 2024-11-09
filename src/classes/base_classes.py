@@ -5,6 +5,8 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from utils.text_utils import cprint, bcolors
+
 if TYPE_CHECKING:
     from classes.pokemon import Pokemon
 
@@ -83,7 +85,19 @@ class PackHolder:
             p = self.mons[pack_name]
             outp = repr(p)
             out_parts = outp.split("\n")
-            out_parts[0] = f"{i+1}. {pack_name}"
+            if self.mons[k].is_fully_data_merged():
+                _colr = bcolors.OKGREEN
+            elif self.mons[k].is_partially_data_merged():
+                _colr = bcolors.OKCYAN
+            else:
+                _colr = None
+            out_parts[0] = cprint(
+                f"{i+1}. {pack_name}",
+                color=_colr,
+            )
+
+            # out_parts[0] = f"{i+1}. {pack_name}"
+
             outp = "\n".join(out_parts)
             _outp += f"{outp}\n"
         return _outp
