@@ -31,7 +31,7 @@ class PokemonForm:
     parent_pokemon: Optional["Pokemon"] = None
     parent_pack: Optional["Pack"] = None
 
-    merge_status: Optional[MergeStatus] = None
+    merge_status: Optional[MergeStatus] = field(default_factory=MergeStatus)
 
     def is_fully_data_merged(self) -> bool:
         if self.merge_status is not None:

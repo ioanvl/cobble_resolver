@@ -719,7 +719,8 @@ class Pack:
                         form.spawn_pool.append(input_file_path)
                         form.spawn_pool = list(set(form.spawn_pool))
                 else:
-                    new_form = PokemonForm(name=f"--{aspect}")
+                    # new_form = PokemonForm(name=f"--{aspect}")
+                    new_form = PokemonForm(name=f"--{aspect}", aspects=[aspect])
                     new_form.spawn_pool.append(input_file_path)
                     self.pokemon[pok_name].forms[new_form.name] = new_form
 
@@ -740,7 +741,8 @@ class Pack:
 
         aspect: str = ""
         if len(pok_parts) > 1:  # try to find an aspect
-            feat_parts: list[str] = pok_parts[1].split("=")
+            pok_parts_rest = "_".join([pok_parts[1:]])
+            feat_parts: list[str] = pok_parts_rest.split("=")
 
             if len(feat_parts) > 1:  # choice
                 feat_name: str = feat_parts[0]
@@ -1058,7 +1060,12 @@ class Pack:
 
     def _assign_sound_files(self) -> None:
         for pokemon_sound in self.sounds:
-            if pokemon_sound.internal_name not in self.pokemon:
+            pok_name = pokemon_sound.internal_name
+            name, aspect = self._extract_name_and_aspect(
+                pok_name, available_features=self.features
+            )
+
+            if name not in self.pokemon:
                 self.pokemon[pokemon_sound.internal_name] = Pokemon(
                     internal_name=pokemon_sound.internal_name,
                     dex_id=-1,
@@ -1066,6 +1073,20 @@ class Pack:
                         DefaultNames.BASE_FORM: PokemonForm(name=DefaultNames.BASE_FORM)
                     },
                 )
+
+            # if aspect:  # if you found an aspect, match it or create
+            #     if relevant_forms := self._match_aspect_to_form(
+            #         aspect=aspect, pokemon=self.pokemon[pok_name]
+            #     ):
+            #         for form in relevant_forms:
+            #             form.spawn_pool.append(input_file_path)
+            #             form.spawn_pool = list(set(form.spawn_pool))
+            #     else:
+            #         # new_form = PokemonForm(name=f"--{aspect}")
+            #         new_form = PokemonForm(name=f"--{aspect}", aspects=[aspect])
+            #         new_form.spawn_pool.append(input_file_path)
+            #         self.pokemon[pok_name].forms[new_form.name] = new_form
+
             self.pokemon[pokemon_sound.internal_name].sound_entry = pokemon_sound
 
     # ------------------------------------------------------------

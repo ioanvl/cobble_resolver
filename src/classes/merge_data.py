@@ -103,7 +103,7 @@ class Merger:
             mons=list(holder.mons.values()), _process_mods=_process_mods
         )
 
-        print(holder, end="\n\n")
+        # print(holder, end="\n\n")
 
         Merger.merge_data(holder=holder, _process_mods=_process_mods)
 
@@ -226,7 +226,51 @@ class Merger:
                 mons=_proc_mons,
                 pre_extracted_species=_extracted_base.extracted_sas,
             )
+
+        Merger.assign_merge_scores(
+            extracted_data=extracted_path_to_species, mons=_proc_mons
+        )
+
+        print(holder, end="\n\n")
+
         pass
+
+    @staticmethod
+    def assign_merge_scores(extracted_data: dict[Any, dict], mons: list["Pokemon"]):
+        __ignored_keys = ["target", "dex_id", "evolutions", "forms"]
+        if gcr_settings.COMBINE_POKEMON_MOVES:
+            __ignored_keys.append("moves")
+        for mon in mons:
+            for form in mon.forms.values():
+                full_flag = False
+                key = form.get_species_paths_key()
+                if (key[0] is None) and (key[1] is None):
+                    continue
+                _data = extracted_data[key]
+
+                if form.name == DefaultNames.BASE_FORM:
+                    if all([(k in __ignored_keys) for k in _data]):
+                        full_flag = True
+                else:
+                    _forms = [
+                        f for f in _data.get("forms", list()) if f["name"] == form.name
+                    ]
+                    if not _forms:
+                        full_flag = True
+                    else:
+                        _form = _forms[0]
+                        if all([(k in __ignored_keys) for k in _form]):
+                            full_flag = True
+                if form.species is not None:
+                    form.merge_status.species = (
+                        MergeST.FULL
+                        if (full_flag or (form.species_additions is not None))
+                        else MergeST.PARTIAL
+                    )
+                if form.species_additions is not None:
+                    form.merge_status.species_additions = (
+                        MergeST.FULL if full_flag else MergeST.PARTIAL
+                    )
 
     @staticmethod
     def _extract_mons_data_from_common(
