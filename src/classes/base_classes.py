@@ -71,3 +71,19 @@ class PackHolder:
                 if mon.parent_pack.is_base:
                     return True
         return False
+
+    def __str__(self):
+        _outp = ""
+        _outp += f"#{self.dex_num} - {self.name}\n"
+
+        keys = list(self.mons.keys())
+
+        for i, k in enumerate(keys):
+            pack_name = k
+            p = self.mons[pack_name]
+            outp = repr(p)
+            out_parts = outp.split("\n")
+            out_parts[0] = f"{i+1}. {pack_name}"
+            outp = "\n".join(out_parts)
+            _outp += f"{outp}\n"
+        return _outp

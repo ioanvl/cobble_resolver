@@ -180,6 +180,12 @@ class PokemonForm:
     def is_relevant_form(self, name: str) -> bool:
         return (self.name == name) or (name in self.aspects)
 
+    def get_species_paths_key(self) -> tuple[Path | None, Path | None]:
+        return (
+            getattr(getattr(self, "species", None), "file_path", None),
+            getattr(getattr(self, "species_additions", None), "file_path", None),
+        )
+
     def _st(self) -> LiteralString:
         return f"{' '*(3 if (self.name != 'base_form') else 0)}|"
 

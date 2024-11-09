@@ -211,11 +211,11 @@ class Combiner:
 
         line_header("RESOLVING")
 
-        self._merge_v_a()
-
-        # self._resolution_core()
-
-        # self._resolution_greedy()
+        if gcr_settings.OP_MODE.value:
+            self._merge_v_a()
+        else:
+            # self._resolution_core()
+            self._resolution_greedy()
 
     def _sort_pokemon_str(self, inp: Iterable[str]):
         return sorted(
@@ -522,26 +522,26 @@ class Combiner:
         print("=" * 25)
 
     def _choose_pack(self, pack_holder: PackHolder):
-        mons: dict[str, Pokemon] = pack_holder.mons
-
         if not self.__helper_message_displayed:
             print(HelperText.AUTO_MANUAL_CHOISE)
             _ = input("Press [Enter] to continue..")
             print(clear_line, end="")
             self.__helper_message_displayed = True
 
-        print(f"#{pack_holder.dex_num} - {pack_holder.name}")
-
+        mons: dict[str, Pokemon] = pack_holder.mons
         keys = list(mons.keys())
 
-        for i, k in enumerate(keys):
-            pack_name = k
-            p = mons[pack_name]
-            outp = repr(p)
-            out_parts = outp.split("\n")
-            out_parts[0] = f"{i+1}. {pack_name}"
-            outp = "\n".join(out_parts)
-            print(outp)
+        # print(f"#{pack_holder.dex_num} - {pack_holder.name}")
+        # for i, k in enumerate(keys):
+        #     pack_name = k
+        #     p = mons[pack_name]
+        #     outp = repr(p)
+        #     out_parts = outp.split("\n")
+        #     out_parts[0] = f"{i+1}. {pack_name}"
+        #     outp = "\n".join(out_parts)
+        #     print(outp)
+
+        print(str(pack_holder), end="")
 
         while True:
             k_in = positive_int_choice(

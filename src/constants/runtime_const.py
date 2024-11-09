@@ -16,7 +16,8 @@ class CRSettings:
 
     PROCESS_MODS: bool = False
 
-    MERGE_POKEMON_MOVES: bool = False
+    COMBINE_EVOLUTIONS: bool = False
+    COMBINE_POKEMON_MOVES: bool = False
 
     KEEP_DUPLICATE_SAS_ON_MOVE: bool = True
     KEEP_DUPLICATE_SPAWNS_ON_MOVE: bool = True

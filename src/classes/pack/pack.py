@@ -694,8 +694,10 @@ class Pack:
 
         for spawn_entry in spawns:
             pok: str = spawn_entry["pokemon"]
-            pok_parts: list[str] = pok.split(" ")
-            pok_name: str = pok_parts[0]
+
+            pok_name, aspect = self._extract_name_and_aspect(
+                full_pokemon_string=pok, available_features=self.features
+            )
 
             if pok_name not in self.pokemon:
                 if DEBUG:
@@ -709,57 +711,14 @@ class Pack:
                     },
                 )
 
-            aspect = ""
-            if len(pok_parts) > 1:  # try to find an aspect
-                feat_parts: list[str] = pok_parts[1].split("=")
-
-                if len(feat_parts) > 1:  # choice
-                    feat_name: str = feat_parts[0]
-                    feat_choice: str = feat_parts[1]
-
-                    if feat_choice.lower() in [
-                        "true",
-                        "false",
-                    ]:  # fix for some dumb stuff
-                        if feat_choice.lower() == "true":
-                            aspect = feat_parts[0]
-                    elif feat_name.lower() == "form":  # fix other dumb stuff
-                        if feat_choice.lower() in self.pokemon[pok_name].forms:
-                            self.pokemon[pok_name].forms[
-                                feat_choice.lower()
-                            ].spawn_pool.append(input_file_path)
-                            self.pokemon[pok_name].forms[
-                                feat_choice.lower()
-                            ].spawn_pool = list(
-                                set(
-                                    self.pokemon[pok_name]
-                                    .forms[feat_choice.lower()]
-                                    .spawn_pool
-                                )
-                            )
-                            continue
-                    else:
-                        selected = ""
-                        if feat_name in self.features:
-                            selected = self.features[feat_name].source["aspectFormat"]
-                        else:
-                            for val in self.features.values():
-                                if feat_name in val.keys:
-                                    selected = val.source["aspectFormat"]
-                                    break
-                        if selected:
-                            aspect = selected.replace("{{choice}}", feat_choice)
-                else:
-                    aspect = feat_parts[0]
-
             if aspect:  # if you found an aspect, match it or create
-                flag = False
-                for form in self.pokemon[pok_name].forms.values():
-                    if aspect in form.aspects:
+                if relevant_forms := self._match_aspect_to_form(
+                    aspect=aspect, pokemon=self.pokemon[pok_name]
+                ):
+                    for form in relevant_forms:
                         form.spawn_pool.append(input_file_path)
                         form.spawn_pool = list(set(form.spawn_pool))
-                        flag = True
-                if not flag:
+                else:
                     new_form = PokemonForm(name=f"--{aspect}")
                     new_form.spawn_pool.append(input_file_path)
                     self.pokemon[pok_name].forms[new_form.name] = new_form
