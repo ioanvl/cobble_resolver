@@ -337,8 +337,9 @@ class Pack:
         res = dict()
         for pok in self.pokemon.values():
             if pok.selected:
-                if pok.sound_entry is not None:
-                    res.update(pok.sound_entry.data)
+                for form in pok.forms.values():
+                    if form.sound_entry is not None:
+                        res.update(pok.sound_entry.data)
         return res
 
     # ============================================================
@@ -741,8 +742,7 @@ class Pack:
 
         aspect: str = ""
         if len(pok_parts) > 1:  # try to find an aspect
-            pok_parts_rest = "_".join([pok_parts[1:]])
-            feat_parts: list[str] = pok_parts_rest.split("=")
+            feat_parts: list[str] = pok_parts[1].split("=")
 
             if len(feat_parts) > 1:  # choice
                 feat_name: str = feat_parts[0]
@@ -769,6 +769,13 @@ class Pack:
                         aspect = selected.replace("{{choice}}", feat_choice)
             else:
                 aspect = feat_parts[0]
+        if not aspect:
+            feat_parts = pok_name.split("_")
+            if len(feat_parts) > 1:
+                aspect = (
+                    "_".join(feat_parts[1:]) if len(feat_parts) > 2 else feat_parts[1]
+                )
+                pok_name = feat_parts[0]
         return pok_name, aspect
 
     @staticmethod
@@ -1060,34 +1067,35 @@ class Pack:
 
     def _assign_sound_files(self) -> None:
         for pokemon_sound in self.sounds:
-            pok_name = pokemon_sound.internal_name
             name, aspect = self._extract_name_and_aspect(
-                pok_name, available_features=self.features
+                pokemon_sound.internal_name, available_features=self.features
             )
 
             if name not in self.pokemon:
-                self.pokemon[pokemon_sound.internal_name] = Pokemon(
-                    internal_name=pokemon_sound.internal_name,
+                self.pokemon[name] = Pokemon(
+                    internal_name=name,
                     dex_id=-1,
                     forms={
                         DefaultNames.BASE_FORM: PokemonForm(name=DefaultNames.BASE_FORM)
                     },
                 )
 
-            # if aspect:  # if you found an aspect, match it or create
-            #     if relevant_forms := self._match_aspect_to_form(
-            #         aspect=aspect, pokemon=self.pokemon[pok_name]
-            #     ):
-            #         for form in relevant_forms:
-            #             form.spawn_pool.append(input_file_path)
-            #             form.spawn_pool = list(set(form.spawn_pool))
-            #     else:
-            #         # new_form = PokemonForm(name=f"--{aspect}")
-            #         new_form = PokemonForm(name=f"--{aspect}", aspects=[aspect])
-            #         new_form.spawn_pool.append(input_file_path)
-            #         self.pokemon[pok_name].forms[new_form.name] = new_form
+            if aspect:  # if you found an aspect, match it or create
+                if relevant_forms := self._match_aspect_to_form(
+                    aspect=aspect, pokemon=self.pokemon[name]
+                ):
+                    for form in relevant_forms:
+                        form.sound_entry = pokemon_sound
 
-            self.pokemon[pokemon_sound.internal_name].sound_entry = pokemon_sound
+                else:
+                    # new_form = PokemonForm(name=f"--{aspect}")
+                    new_form = PokemonForm(name=f"--{aspect}", aspects=[aspect])
+                    new_form.sound_entry = pokemon_sound
+                    self.pokemon[name].forms[new_form.name] = new_form
+            else:
+                self.pokemon[name].forms[
+                    DefaultNames.BASE_FORM
+                ].sound_entry = pokemon_sound
 
     # ------------------------------------------------------------
 

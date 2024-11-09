@@ -84,8 +84,7 @@ class Pokemon:
         res: set[Path] = set()
         for form in self.forms.values():
             res.update(form.get_all_paths())
-        if self.sound_entry is not None:
-            res.update(self.sound_entry.get_all_files())
+
         res.update(self.sa_transfers_received)
         res.update(self._get_relevant_feature_files())
         return list(res)

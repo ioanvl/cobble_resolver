@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, LiteralString, Optional
 
 from classes.base_classes import bcfo
 from classes.merge_data import MergeStatus, merge_color_assignment, MergeST
+from classes.sounds import SoundEntry
 from constants.text_constants import DefaultNames, TextSymbols
 from utils.cli_utils.generic import bool_square
 from utils.text_utils import cprint
@@ -27,6 +28,8 @@ class PokemonForm:
     species_additions: bcfo | None = None
 
     spawn_pool: list[Path] = field(default_factory=list)
+
+    sound_entry: SoundEntry | None = None
 
     parent_pokemon: Optional["Pokemon"] = None
     parent_pack: Optional["Pack"] = None
@@ -100,9 +103,10 @@ class PokemonForm:
                 else 0
             ],
         )
+        if self.sound_entry:
+            ret += f"| {TextSymbols.music_symbol}:{bool_square(self.sound_entry)} "
 
         if self.name == DefaultNames.BASE_FORM and (self.parent_pokemon is not None):
-            ret += f"| {TextSymbols.music_symbol}:{bool_square(self.parent_pack.sounds)} "
             if self.parent_pokemon.sa_transfers_received:
                 ret += " +SA"
 
@@ -150,6 +154,8 @@ class PokemonForm:
         if self.parent_pokemon:
             for i in self.resolver_assignments:
                 res.update(self.parent_pokemon.resolvers[i].get_all_paths())
+        if self.sound_entry is not None:
+            res.update(self.sound_entry.get_all_files())
         return list(res)
 
     def is_complete(self) -> bool:
