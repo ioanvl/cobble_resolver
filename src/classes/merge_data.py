@@ -4,21 +4,20 @@ import copy
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterable, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from classes.base_classes import PackHolder
 from constants.runtime_const import gcr_settings
 from constants.text_constants import DefaultNames
 from utils.cli_utils.keypress import clear_line, keypress
+from utils.dict_utils import combine
 from utils.dict_utils_transitive import compare
 from utils.get_resource import load_json_from_path
 from utils.text_utils import bcolors, cprint, next_candidate_name
-from utils.dict_utils import combine
 
 if TYPE_CHECKING:
     from classes.combiner.combiner import Combiner
     from classes.pokemon import Pokemon
-    from classes.pokemon_form import PokemonForm
 
 
 class MergeST(Enum):
@@ -82,7 +81,7 @@ class Merger:
         self._attached_combiner: Optional["Combiner"] = attached_combiner
 
         self._mons_to_move: dict[str, PackHolder] = dict()
-        self._monds_to_merge: dict[str, MergeDataOutput] = dict()
+        self._monds_to_merge: dict[str, MergePackHolder] = dict()
 
     def process(self, attached_combiner: Optional["Combiner"] = None):
         self._attached_combiner = attached_combiner or self._attached_combiner
@@ -96,6 +95,69 @@ class Merger:
     def _merge_final_pokemon(self):
         for pok_name, merge_holder in self._monds_to_merge.items():
             print(pok_name)
+
+            extras: set[str] = set(merge_holder.original_holder.mons.keys())
+            extras.difference(set([merge_holder.pick]))
+            extras.difference(set(merge_holder.original_holder._get_unprocessable_keys()))
+
+            pick = merge_holder.pick if (merge_holder.pick is not None) else None
+            pick_mon = (
+                merge_holder.original_holder.mons[merge_holder.pick]
+                if merge_holder.pick is not None
+                else None
+            )
+
+            if DefaultNames.BASE_COBBLE_MOD in merge_holder.original_holder.mons:
+                _species_base = (
+                    merge_holder.original_holder.mons[DefaultNames.BASE_COBBLE_MOD]
+                    .forms[DefaultNames.BASE_FORM]
+                    .species.source
+                )
+            else:
+                _species_base = merge_holder.extracted_addition.extracted_base
+
+            _final_sa = dict()
+            if pick_mon and (
+                (not pick_mon.parent_pack.is_base)
+                or (pick_mon.parent_pack.is_mod and (not gcr_settings.PROCESS_MODS))
+            ):
+                _final_sa = pick_mon._extracted_sa
+
+            extra_sas = list()
+            for ex in extras:
+                if ex_sa := merge_holder.original_holder.mons[ex]._extracted_sa:
+                    extra_sas.append(ex_sa)
+            _merged_extras_sa = self._merge_species_with_sas(
+                species=dict(),
+                species_additions=extra_sas,
+                overwrite=False,
+                include=True,
+            )
+
+            _merged_extras_sa = self._extract_against_common(
+                common_base=_species_base,
+                inpt_species={0: _merged_extras_sa},
+            )[0]
+
+            _final_sa = dict()
+            if pick_mon:
+                if (not pick_mon.parent_pack.is_base) or (
+                    pick_mon.parent_pack.is_mod and (not gcr_settings.PROCESS_MODS)
+                ):
+                    _final_sa = pick_mon._extracted_sa
+                    _final_sa = self._merge_species_with_sas(
+                        species=_final_sa, species_additions=[_merged_extras_sa]
+                    )
+                else:
+                    _final_sa = self._extract_against_common(
+                        common_base=pick_mon.forms[DefaultNames.BASE_FORM].species.source,
+                        inpt_species={0: _merged_extras_sa},
+                        exclude_existing=True,
+                    )[0]
+            else:
+                _final_sa = self._extract_against_common(
+                    common_base=_species_base, inpt_species={0: _merged_extras_sa}
+                )[0]
 
             pass
 
@@ -159,28 +221,32 @@ class Merger:
                 color=True, only_graphics=True, exclude_merged=True, show_merged=True
             )
             print(disp, end="\n\n")
-            _err = None
-            while True:
-                print(clear_line, end="")
-                if _err is not None:
-                    print(f"Invalid choice: [{_err}]")
-                inp = keypress("Input pack choice Num[#]: ")
-                if _err is not None:
+            if False:
+                _err = None
+                while True:
                     print(clear_line, end="")
-                try:
-                    inp = int(inp)
-                except Exception:
-                    _err = inp
-                    continue
-                if inp > 0 and inp <= len(keys):
-                    break
-                else:
-                    _err = inp
-            if _err is not None:
-                print(clear_line)
-            print(clear_line, end="")
+                    if _err is not None:
+                        print(f"Invalid choice: [{_err}]")
+                    inp = keypress("Input pack choice Num[#]: ")
+                    if _err is not None:
+                        print(clear_line, end="")
+                    try:
+                        inp = int(inp)
+                    except Exception:
+                        _err = inp
+                        continue
+                    if inp > 0 and inp <= len(keys):
+                        break
+                    else:
+                        _err = inp
+                if _err is not None:
+                    print(clear_line)
+                print(clear_line, end="")
 
-            pick = keys[inp - 1]
+                pick = keys[inp - 1]
+            else:
+                pick = keys[0]
+
             print(cprint(f"={'-'*15}", color=bcolors.WARNING))
             print(f"Selected: [{pick}]")
             print(cprint(f"={'-'*15}", color=bcolors.WARNING))
@@ -248,7 +314,7 @@ class Merger:
                     data.get("neededUninstalledMods", list())
                 )
 
-                for sp_entry in outp.get("spawns", list()):
+                for sp_entry in data.get("spawns", list()):
                     # try: <-- add
                     entry_name = sp_entry["pokemon"].split(" ")[0]
                     if (
@@ -278,7 +344,7 @@ class Merger:
         outp["neededInstalledMods"] = list(outp["neededInstalledMods"])
         outp["neededUninstalledMods"] = list(outp["neededUninstalledMods"])
 
-        for key, item in spawns:
+        for key, item in spawns.items():
             item["id"] = key
             outp["spawns"].append(item)
 
@@ -336,7 +402,7 @@ class Merger:
         )
 
         return MergeDataOutput(
-            extracted_base=_extracted_base,
+            extracted_base=_extracted_base._common_base if _extracted_base else None,
             extracted_path_to_additions=extracted_path_to_species,
         )
 
@@ -492,17 +558,20 @@ class Merger:
     def _extract_against_common(
         common_base: dict,
         inpt_species: dict[Any, dict],
+        exclude_existing: bool = False,
     ) -> dict[Any, dict]:
         """From BASE and species, extract -additions-"""
 
         _special_form_keys = ["forms", "evolutions"]
-        outp: dict[Path, dict] = dict()
+        outp: dict[Any, dict] = dict()
 
         for sp_key, species in inpt_species.items():
             outp[sp_key] = dict()
 
             for c_key in species:  # keys from addition not in base
                 if c_key in _special_form_keys:
+                    continue
+                if c_key in common_base and exclude_existing:
                     continue
                 if (c_key not in common_base) or (
                     not compare(species[c_key], common_base[c_key], loose=True)
