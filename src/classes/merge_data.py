@@ -9,10 +9,10 @@ from typing import TYPE_CHECKING, Any, Iterable, Optional
 from classes.base_classes import PackHolder
 from constants.runtime_const import gcr_settings
 from constants.text_constants import DefaultNames
-from utils.cli_utils.keypress import keypress, clear_line
+from utils.cli_utils.keypress import clear_line, keypress
 from utils.dict_utils_transitive import compare
 from utils.get_resource import load_json_from_path
-from utils.text_utils import bcolors, next_candidate_name, cprint
+from utils.text_utils import bcolors, cprint, next_candidate_name
 
 if TYPE_CHECKING:
     from classes.combiner.combiner import Combiner
@@ -88,12 +88,19 @@ class Merger:
         if self._attached_combiner is None:
             raise RuntimeError
         self._process()
+        self._merge_final_pokemon()
 
         _ = input("--break--")
 
+    def _merge_final_pokemon(self):
+        for pok_name, merge_holder in self._monds_to_merge.items():
+            print(pok_name)
+
+            pass
+
     def _process(self):
         _to_check: set[str] = self._attached_combiner.defined_pokemon.copy()
-        _checked: set[str] = set()
+        # _checked: set[str] = set()
 
         _needs_choice: dict[str, MergeDataOutput] = dict()
 
@@ -116,7 +123,7 @@ class Merger:
                         selected_pack=pack_name,
                         selection_type="ADD",
                     )
-                    _checked.add(pok_name)
+                    # _checked.add(pok_name)
                     self._mons_to_move[pok_name] = ph
             else:
                 merge_data: MergePackHolder = Merger.merge(holder=ph)
@@ -137,7 +144,7 @@ class Merger:
                             text="===AUTO MERGE==", color=bcolors.WARNING
                         ),
                     )
-                    _checked.add(pok_name)
+                    # _checked.add(pok_name)
                     merge_data.auto_pick = pack_name
                 else:
                     _needs_choice[pok_name] = merge_data
@@ -181,7 +188,7 @@ class Merger:
 
             merge_holder.pick = pick
 
-            pass
+            self._monds_to_merge[pok_name] = merge_holder
 
     @staticmethod
     def merge(holder: PackHolder, _process_mods: bool = gcr_settings.PROCESS_MODS):
@@ -388,6 +395,8 @@ class Merger:
         path_to_species_index: dict[Path, dict] = dict()
         extracted_path_to_species = dict()
         for mon in mons:
+            mon_form_keys = set()
+
             for form in mon.forms.values():
                 key = form.get_species_paths_key()
 
@@ -419,12 +428,32 @@ class Merger:
                     else:
                         _temp = form.species_additions.source
                     path_to_species_index[key] = _temp
+                mon_form_keys.add(key)
 
         if path_to_species_index:
             extracted_path_to_species = Merger._extract_against_common(
                 common_base=base_form,
                 inpt_species=path_to_species_index,
             )
+
+        for mon in mons:
+            mon_form_keys = set()
+            for form in mon.forms.values():
+                mon_form_keys.add(form.get_species_paths_key())
+            _final_sa = dict()
+            if mon_form_keys:
+                mon_sa = [
+                    _fin_sa
+                    for _fo_key, _fin_sa in path_to_species_index.items()
+                    if _fo_key in mon_form_keys
+                ]
+                _final_sa = Merger._merge_species_with_sas(
+                    species=dict(),
+                    species_additions=mon_sa,
+                    overwrite=True,  # shouldnt matter
+                    include=True,
+                )
+            mon._extracted_sa = _final_sa
         return extracted_path_to_species
 
     @staticmethod
@@ -599,6 +628,12 @@ class Merger:
             vals = [x[key] for x in species_additions if key in x]
             if compare(*vals, loose=True):
                 _outp[key] = vals[0]
+            elif (key == "moves") and gcr_settings.COMBINE_POKEMON_MOVES:
+                _temp_out = set()
+                _temp_out.update(species.get("moves", list()))
+                for _v in vals:
+                    _temp_out.update(_v)
+                _outp[key] = _temp_out
             else:
                 _most_common = max(set(vals), key=vals.count)
                 _outp[key] = _most_common

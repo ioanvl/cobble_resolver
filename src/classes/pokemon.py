@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from classes.sounds import SoundEntry
+from utils.text_utils import bcolors, cprint
 
 if TYPE_CHECKING:
     from classes.evolutions import EvolutionEntry
@@ -31,6 +32,10 @@ class Pokemon:
     request_transfered: int = 0
 
     sa_transfers_received: set[Path] = field(default_factory=set)
+
+    _extracted_sa: dict = field(default_factory=dict)
+
+    is_pseudoform: bool = False
 
     pre_evos: int = 0
     evos: int = 0
@@ -127,6 +132,8 @@ class Pokemon:
         merge_mode: bool = False,
     ):
         ret: str = f"#{self.dex_id} - "
+        if self.is_pseudoform:
+            ret += f"[{cprint(text="PF", color=bcolors.WARNING)}]"
         if self.name is None:
             ret += f"[{self.internal_name}]"
         else:

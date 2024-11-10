@@ -11,8 +11,10 @@ class CrOpType(Enum):
 
 @dataclass
 class CRSettings:
-    POKEDEX_FIX: bool = True
     OP_MODE: CrOpType = CrOpType.PICK
+
+    POKEDEX_FIX: bool = True
+    EXCLUDE_PSEUDOFORMS: bool = True
 
     PROCESS_MODS: bool = False
 
