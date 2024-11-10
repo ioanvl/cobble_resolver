@@ -27,6 +27,7 @@ class Pokemon:
 
     parent_pack: Optional["Pack"] = None
     selected: bool = False
+    merged: bool = False
 
     requested: int = 0
     request_transfered: int = 0

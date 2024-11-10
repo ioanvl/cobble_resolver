@@ -13,6 +13,7 @@ from utils.cli_utils.keypress import clear_line, keypress
 from utils.dict_utils_transitive import compare
 from utils.get_resource import load_json_from_path
 from utils.text_utils import bcolors, cprint, next_candidate_name
+from utils.dict_utils import combine
 
 if TYPE_CHECKING:
     from classes.combiner.combiner import Combiner
@@ -66,7 +67,7 @@ class MergePackHolder:
     extracted_addition: MergeDataOutput | None
     choice_options: None | list[str]
 
-    auto_pick: str | None = None
+    auto_pick: bool = False
     pick: str | None = None
 
 
@@ -140,12 +141,11 @@ class Merger:
                         number=ph.dex_num,
                         name=ph.name,
                         selected_pack=pack_name,
-                        selection_type=cprint(
-                            text="===AUTO MERGE==", color=bcolors.WARNING
-                        ),
+                        selection_type=cprint(text="===MERGE==", color=bcolors.WARNING),
                     )
                     # _checked.add(pok_name)
-                    merge_data.auto_pick = pack_name
+                    merge_data.auto_pick = True
+                    merge_data.pick = pack_name
                 else:
                     _needs_choice[pok_name] = merge_data
 
@@ -436,24 +436,25 @@ class Merger:
                 inpt_species=path_to_species_index,
             )
 
-        for mon in mons:
-            mon_form_keys = set()
-            for form in mon.forms.values():
-                mon_form_keys.add(form.get_species_paths_key())
-            _final_sa = dict()
-            if mon_form_keys:
-                mon_sa = [
-                    _fin_sa
-                    for _fo_key, _fin_sa in path_to_species_index.items()
-                    if _fo_key in mon_form_keys
-                ]
-                _final_sa = Merger._merge_species_with_sas(
-                    species=dict(),
-                    species_additions=mon_sa,
-                    overwrite=True,  # shouldnt matter
-                    include=True,
-                )
-            mon._extracted_sa = _final_sa
+            for mon in mons:
+                mon_form_keys = set()
+                for form in mon.forms.values():
+                    mon_form_keys.add(form.get_species_paths_key())
+                _final_sa = dict()
+                if mon_form_keys:
+                    mon_sa = [
+                        _fin_sa
+                        for _fo_key, _fin_sa in path_to_species_index.items()
+                        if _fo_key in mon_form_keys
+                    ]
+                    if mon_sa:  # avoid (None, None)
+                        _final_sa = Merger._merge_species_with_sas(
+                            species=dict(),
+                            species_additions=mon_sa,
+                            overwrite=True,  # shouldnt matter
+                            include=True,
+                        )
+                mon._extracted_sa = _final_sa
         return extracted_path_to_species
 
     @staticmethod
@@ -626,6 +627,8 @@ class Merger:
                 continue
 
             vals = [x[key] for x in species_additions if key in x]
+            if key in species:
+                vals.insert(0, species[key])
             if compare(*vals, loose=True):
                 _outp[key] = vals[0]
             elif (key == "moves") and gcr_settings.COMBINE_POKEMON_MOVES:
@@ -633,10 +636,21 @@ class Merger:
                 _temp_out.update(species.get("moves", list()))
                 for _v in vals:
                     _temp_out.update(_v)
-                _outp[key] = _temp_out
+                _outp[key] = list(_temp_out)
             else:
-                _most_common = max(set(vals), key=vals.count)
-                _outp[key] = _most_common
+                try:
+                    _most_common = max(set(vals), key=vals.count)
+                    _outp[key] = _most_common
+                except TypeError:
+                    if include:
+                        if isinstance(vals[0], (list, set, dict)):
+                            _outp[key] = combine(*vals)
+                        else:
+                            _outp[key] = vals[0]
+                    else:
+                        if overwrite:
+                            _outp[key] = vals[0]
+
         # ------------------------------------------------------------------------
         _outp["forms"] = Merger._merge_forms_with_form_additions(
             species=species.get("forms", list()),
@@ -690,6 +704,8 @@ class Merger:
                 else:
                     if include:
                         _outp[id] = temp
+        for _id, evo in _outp.items():
+            evo["id"] = _id
         return list(_outp.values())
 
     @staticmethod
