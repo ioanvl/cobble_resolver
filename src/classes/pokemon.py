@@ -120,7 +120,12 @@ class Pokemon:
             [f.is_partially_data_merged() for f in self.forms.values()]
         )
 
-    def __repr__(self) -> str:
+    def _display(
+        self,
+        color: bool = True,
+        exclude_merged: bool = False,
+        merge_mode: bool = False,
+    ):
         ret: str = f"#{self.dex_id} - "
         if self.name is None:
             ret += f"[{self.internal_name}]"
@@ -129,15 +134,11 @@ class Pokemon:
 
         for f in self.forms.values():
             ret += "\n"
-            pok_f: str = repr(f)
-            # if al := len(f.resolver_assignments):
-            #     p_parts = pok_f.split("\n")
-            #     p_parts.append(p_parts[-1])
-            #     p_parts[-2] = (
-            #         f"{f._st()} {repr(self.resolvers[list(f.resolver_assignments)[0]])}"
-            #     )
-            #     if al > 1:
-            #         p_parts[-2] = p_parts[-2] + f"  +{al-1}"
-            #     pok_f = "\n".join(p_parts)
-            ret += pok_f
+            ret += f._display(color=color, merge_mode=merge_mode)
         return ret
+
+    def __repr__(self) -> str:
+        return self._display(color=False)
+
+    def has_graphics(self):
+        return bool(self.resolvers)

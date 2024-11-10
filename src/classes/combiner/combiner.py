@@ -509,13 +509,14 @@ class Combiner:
         return (None, None)
 
     def _print_pack_choise(
-        self, number: int, name: str, selected_pack: str, selection_type: str = "M"
+        self, number: int, name: str, selected_pack: str | None, selection_type: str = "M"
     ) -> None:
-        x = [p for p in self.packs if p.name == selected_pack][0]
-        if (x.is_base and (selection_type in ["A"])) or (
-            (x.is_mod and (not x.is_base)) and (not self._process_mods)
-        ):
-            return
+        if selected_pack is not None:
+            x = [p for p in self.packs if p.name == selected_pack][0]
+            if (x.is_base and (selection_type in ["A"])) or (
+                (x.is_mod and (not x.is_base)) and (not self._process_mods)
+            ):
+                return
 
         print(f"-- AUTO [{selection_type}] -- \n#{number} - {name}  [{selected_pack}]")
 

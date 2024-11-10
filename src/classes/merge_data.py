@@ -4,14 +4,15 @@ import copy
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Iterable, Optional
 
 from classes.base_classes import PackHolder
 from constants.runtime_const import gcr_settings
 from constants.text_constants import DefaultNames
+from utils.cli_utils.keypress import keypress, clear_line
 from utils.dict_utils_transitive import compare
 from utils.get_resource import load_json_from_path
-from utils.text_utils import bcolors, next_candidate_name
+from utils.text_utils import bcolors, next_candidate_name, cprint
 
 if TYPE_CHECKING:
     from classes.combiner.combiner import Combiner
@@ -53,6 +54,23 @@ class mOutputW:
 
 
 @dataclass
+class MergeDataOutput:
+    extracted_path_to_additions: dict[tuple[Path | None, Path | None], dict]
+    extracted_base: dict | None = None
+
+
+@dataclass
+class MergePackHolder:
+    original_holder: PackHolder
+    merged_spawn_data: dict[str, Any]
+    extracted_addition: MergeDataOutput | None
+    choice_options: None | list[str]
+
+    auto_pick: str | None = None
+    pick: str | None = None
+
+
+@dataclass
 class mOutputZ:
     _common_base_addition: dict
     choice_sas: dict[Path, dict] = field(default_factory=dict)
@@ -61,6 +79,9 @@ class mOutputZ:
 class Merger:
     def __init__(self, attached_combiner: Optional["Combiner"] = None):
         self._attached_combiner: Optional["Combiner"] = attached_combiner
+
+        self._mons_to_move: dict[str, PackHolder] = dict()
+        self._monds_to_merge: dict[str, MergeDataOutput] = dict()
 
     def process(self, attached_combiner: Optional["Combiner"] = None):
         self._attached_combiner = attached_combiner or self._attached_combiner
@@ -74,9 +95,11 @@ class Merger:
         _to_check: set[str] = self._attached_combiner.defined_pokemon.copy()
         _checked: set[str] = set()
 
+        _needs_choice: dict[str, MergeDataOutput] = dict()
+
         _to_check = self._attached_combiner._sort_pokemon_str(inp=_to_check)
 
-        for pok_name in list(_to_check)[::-1]:  # TODO CHANGE THIS BACK !!!!!!!!!!!!!
+        for pok_name in list(_to_check):  # [::-1]:
             ph: PackHolder = self._attached_combiner._make_pack_holder(
                 pokemon_name=pok_name
             )
@@ -94,18 +117,88 @@ class Merger:
                         selection_type="ADD",
                     )
                     _checked.add(pok_name)
+                    self._mons_to_move[pok_name] = ph
             else:
-                Merger.merge(holder=ph)
+                merge_data: MergePackHolder = Merger.merge(holder=ph)
+
+                if (merge_data.choice_options is None) or (
+                    len(merge_data.choice_options) == 1
+                ):
+                    pack_name = (
+                        merge_data.choice_options[0]
+                        if merge_data.choice_options is not None
+                        else None
+                    )
+                    self._attached_combiner._print_pack_choise(
+                        number=ph.dex_num,
+                        name=ph.name,
+                        selected_pack=pack_name,
+                        selection_type=cprint(
+                            text="===AUTO MERGE==", color=bcolors.WARNING
+                        ),
+                    )
+                    _checked.add(pok_name)
+                    merge_data.auto_pick = pack_name
+                else:
+                    _needs_choice[pok_name] = merge_data
+
+                self._monds_to_merge[pok_name] = merge_data
+
+        self.make_pack_choices(mon_packs=_needs_choice)
+
+    def make_pack_choices(self, mon_packs: dict[str, MergePackHolder]):
+        for pok_name, merge_holder in mon_packs.items():
+            disp, keys = merge_holder.original_holder._display(
+                color=True, only_graphics=True, exclude_merged=True, show_merged=True
+            )
+            print(disp, end="\n\n")
+            _err = None
+            while True:
+                print(clear_line, end="")
+                if _err is not None:
+                    print(f"Invalid choice: [{_err}]")
+                inp = keypress("Input pack choice Num[#]: ")
+                if _err is not None:
+                    print(clear_line, end="")
+                try:
+                    inp = int(inp)
+                except Exception:
+                    _err = inp
+                    continue
+                if inp > 0 and inp <= len(keys):
+                    break
+                else:
+                    _err = inp
+            if _err is not None:
+                print(clear_line)
+            print(clear_line, end="")
+
+            pick = keys[inp - 1]
+            print(cprint(f"={'-'*15}", color=bcolors.WARNING))
+            print(f"Selected: [{pick}]")
+            print(cprint(f"={'-'*15}", color=bcolors.WARNING))
+            print("=" * 25)
+
+            merge_holder.pick = pick
+
+            pass
 
     @staticmethod
     def merge(holder: PackHolder, _process_mods: bool = gcr_settings.PROCESS_MODS):
         merged_spawn: dict[str, Any] = Merger.merge_spawns(
             mons=list(holder.mons.values()), _process_mods=_process_mods
         )
+        path_to_species_index: None | MergeDataOutput = Merger.merge_data(
+            holder=holder, _process_mods=_process_mods
+        )
+        options: None | list[str] = Merger.decide_from_viable_picks(mon_holder=holder)
 
-        # print(holder, end="\n\n")
-
-        Merger.merge_data(holder=holder, _process_mods=_process_mods)
+        return MergePackHolder(
+            original_holder=holder,
+            merged_spawn_data=merged_spawn,
+            extracted_addition=path_to_species_index,
+            choice_options=options,
+        )
 
     @staticmethod
     def merge_spawns(
@@ -195,17 +288,20 @@ class Merger:
             )
         ]
         if not _proc_mons:
-            return
+            return None
 
         _base: Optional["Pokemon"] = None
         if x := [m for m in mons if m.parent_pack.is_base]:
             _base = x[0]
 
+        _extracted_base: mOutputW | None = None
         if _base is not None:
             _base_form_species = _base.forms[DefaultNames.BASE_FORM].species.source
 
-            extracted_path_to_species = Merger._extract_mons_data_from_common(
-                base_form=_base_form_species, mons=_proc_mons
+            extracted_path_to_species: dict[tuple[Path | None, Path | None], dict] = (
+                Merger._extract_mons_data_from_common(
+                    base_form=_base_form_species, mons=_proc_mons
+                )
             )
 
         else:
@@ -220,19 +316,31 @@ class Merger:
                 inpt_species=_inp_species,
                 inclussive=False,
             )
-            extracted_path_to_species = Merger._extract_mons_data_from_common(
-                base_form=_extracted_base._common_base,
-                mons=_proc_mons,
-                pre_extracted_species=_extracted_base.extracted_sas,
+            extracted_path_to_species: dict[tuple[Path | None, Path | None], dict] = (
+                Merger._extract_mons_data_from_common(
+                    base_form=_extracted_base._common_base,
+                    mons=_proc_mons,
+                    pre_extracted_species=_extracted_base.extracted_sas,
+                )
             )
 
         Merger.assign_merge_scores(
             extracted_data=extracted_path_to_species, mons=_proc_mons
         )
 
-        print(holder, end="\n\n")
+        return MergeDataOutput(
+            extracted_base=_extracted_base,
+            extracted_path_to_additions=extracted_path_to_species,
+        )
 
-        pass
+    @staticmethod
+    def decide_from_viable_picks(mon_holder: PackHolder) -> None | list[str]:
+        _g_keys = mon_holder._get_graphics_keys()
+
+        if not _g_keys:
+            return None
+        else:
+            return _g_keys
 
     @staticmethod
     def assign_merge_scores(extracted_data: dict[Any, dict], mons: list["Pokemon"]):
@@ -590,5 +698,4 @@ class Merger:
 
     # ------------------------------------------------------------------------
     pass
-
     # ------------------------------------------------------------------------

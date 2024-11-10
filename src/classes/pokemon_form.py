@@ -74,7 +74,7 @@ class PokemonForm:
             and (not self.spawn_pool)
         )
 
-    def __repr__(self) -> str:
+    def _display(self, color: bool = True, merge_mode: bool = False):
         s: str = self._st()
         ret: str = ""
         if self.name != DefaultNames.BASE_FORM:
@@ -83,49 +83,70 @@ class PokemonForm:
         ret += "DATA: "
         ret += cprint(
             f"Spawn:{bool_square(self.spawn_pool)} ",
-            color=merge_color_assignment[
-                getattr(self.merge_status, "spawn_pool").value if self.merge_status else 0
-            ],
+            color=(
+                merge_color_assignment[
+                    getattr(self.merge_status, "spawn_pool").value
+                    if self.merge_status
+                    else 0
+                ]
+                if color
+                else None
+            ),
         )
         ret += "| "
         ret += cprint(
             f"S:{bool_square(self.species)}",
-            color=merge_color_assignment[
-                getattr(self.merge_status, "species").value if self.merge_status else 0
-            ],
+            color=(
+                merge_color_assignment[
+                    getattr(self.merge_status, "species").value
+                    if self.merge_status
+                    else 0
+                ]
+                if color
+                else None
+            ),
         )
         ret += "/"
         ret += cprint(
             f"{bool_square(self.species_additions)}:SA ",
-            color=merge_color_assignment[
-                getattr(self.merge_status, "species_additions").value
-                if self.merge_status
-                else 0
-            ],
+            color=(
+                merge_color_assignment[
+                    getattr(self.merge_status, "species_additions").value
+                    if self.merge_status
+                    else 0
+                ]
+                if color
+                else None
+            ),
         )
         if self.sound_entry:
             ret += f"| {TextSymbols.music_symbol}:{bool_square(self.sound_entry)} "
 
-        if self.name == DefaultNames.BASE_FORM and (self.parent_pokemon is not None):
-            if self.parent_pokemon.sa_transfers_received:
-                ret += " +SA"
+        if not merge_mode:
+            if self.name == DefaultNames.BASE_FORM and (self.parent_pokemon is not None):
+                if self.parent_pokemon.sa_transfers_received:
+                    ret += " +SA"
 
-            if self.parent_pokemon.requested:
-                ret += " +Req"
-                if req_diff := (
-                    self.parent_pokemon.requested - self.parent_pokemon.request_transfered
-                ):
-                    ret += f"[{req_diff}]"
-                    if self.parent_pokemon._is_actively_requested():
-                        ret += TextSymbols.left_arrow
-                else:
-                    ret += f"[{TextSymbols.check_mark}]"
+                if self.parent_pokemon.requested:
+                    ret += " +Req"
+                    if req_diff := (
+                        self.parent_pokemon.requested
+                        - self.parent_pokemon.request_transfered
+                    ):
+                        ret += f"[{req_diff}]"
+                        if self.parent_pokemon._is_actively_requested():
+                            ret += TextSymbols.left_arrow
+                    else:
+                        ret += f"[{TextSymbols.check_mark}]"
 
         for res_ind in self.resolver_assignments:
             ret += f"\n{s} {repr(self.parent_pokemon.resolvers[res_ind])}"
 
         ret += f"\n{s} {'-' * 10}"
         return ret
+
+    def __repr__(self) -> str:
+        return self._display(color=False)
 
     @property
     def comp_stamp(self) -> list[bool]:
