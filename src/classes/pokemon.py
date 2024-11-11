@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
+from classes.base_classes import PackHolder
 from classes.sounds import SoundEntry
 from utils.text_utils import bcolors, cprint
 
@@ -11,6 +12,22 @@ if TYPE_CHECKING:
     from classes.evolutions import EvolutionEntry
     from classes.pack import Pack
     from classes.pokemon_form import PokemonForm, ResolverEntry
+
+
+@dataclass
+class MergePokemon:
+    internal_name: str
+    name: str | None = None
+    dex_id: int | None = None
+
+    species_base: dict | None = None
+    species_addition: dict | None = None
+    spawn_pool: dict | None = None
+
+    picked_mon: Pokemon | None = None
+    extra_mons: list[str] = field(default_factory=list)
+
+    holder: PackHolder | None = None
 
 
 @dataclass

@@ -127,7 +127,7 @@ class Combiner:
             if (p.name == "BASE") or (p.is_mod and (not self._process_mods)):
                 continue
             for pok in p.pokemon:
-                if p.pokemon[pok].selected:
+                if (p.pokemon[pok].selected) or p.pokemon[pok].merged:
                     if pok not in res:
                         res[pok] = set()
                     res[pok].add(p.name)
@@ -154,7 +154,17 @@ class Combiner:
         (folder_path / "pack.mcmeta").write_text(json.dumps(mc))
 
     def _compress_pack(self, folder_path: Path) -> None:
-        shutil.make_archive(str(folder_path), format="zip", root_dir=str(folder_path))
+        for _ in range(3):
+            try:
+                shutil.make_archive(
+                    str(folder_path), format="zip", root_dir=str(folder_path)
+                )
+                break
+            except Exception:
+                _ = input(
+                    "Packaging failed.. If you have the pack open, \
+    from a previous attempt please close it and retry.. Press [Enter] to retry"
+                )
 
     # ------------------------------------------------------------
 

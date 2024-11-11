@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import copy
+import json
+import shutil
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
 from classes.base_classes import PackHolder
+from classes.pokemon import MergePokemon
 from constants.runtime_const import gcr_settings
 from constants.text_constants import DefaultNames
 from utils.cli_utils.keypress import clear_line, keypress
@@ -81,7 +84,9 @@ class Merger:
         self._attached_combiner: Optional["Combiner"] = attached_combiner
 
         self._mons_to_move: dict[str, PackHolder] = dict()
-        self._monds_to_merge: dict[str, MergePackHolder] = dict()
+        self._mons_to_merge: dict[str, MergePackHolder] = dict()
+
+        self.merged_mons: dict[str, MergePokemon] = dict()
 
     def process(self, attached_combiner: Optional["Combiner"] = None):
         self._attached_combiner = attached_combiner or self._attached_combiner
@@ -90,17 +95,28 @@ class Merger:
         self._process()
         self._merge_final_pokemon()
 
-        _ = input("--break--")
+        self._export_mons()
+        # self._attached_combiner.export()
+
+        # _ = input("--break--")
 
     def _merge_final_pokemon(self):
-        for pok_name, merge_holder in self._monds_to_merge.items():
+        for pok_name, merge_holder in self._mons_to_merge.items():
             print(pok_name)
+
+            if all(
+                [
+                    k in merge_holder.original_holder._get_unprocessable_keys()
+                    for k in merge_holder.original_holder.mons.keys()
+                ]
+            ):
+                pass
 
             extras: set[str] = set(merge_holder.original_holder.mons.keys())
             extras.difference(set([merge_holder.pick]))
             extras.difference(set(merge_holder.original_holder._get_unprocessable_keys()))
 
-            pick = merge_holder.pick if (merge_holder.pick is not None) else None
+            # pick = merge_holder.pick if (merge_holder.pick is not None) else None
             pick_mon = (
                 merge_holder.original_holder.mons[merge_holder.pick]
                 if merge_holder.pick is not None
@@ -115,13 +131,6 @@ class Merger:
                 )
             else:
                 _species_base = merge_holder.extracted_addition.extracted_base
-
-            _final_sa = dict()
-            if pick_mon and (
-                (not pick_mon.parent_pack.is_base)
-                or (pick_mon.parent_pack.is_mod and (not gcr_settings.PROCESS_MODS))
-            ):
-                _final_sa = pick_mon._extracted_sa
 
             extra_sas = list()
             for ex in extras:
@@ -139,14 +148,15 @@ class Merger:
                 inpt_species={0: _merged_extras_sa},
             )[0]
 
-            _final_sa = dict()
             if pick_mon:
                 if (not pick_mon.parent_pack.is_base) or (
                     pick_mon.parent_pack.is_mod and (not gcr_settings.PROCESS_MODS)
                 ):
                     _final_sa = pick_mon._extracted_sa
                     _final_sa = self._merge_species_with_sas(
-                        species=_final_sa, species_additions=[_merged_extras_sa]
+                        species=_final_sa,
+                        species_additions=[_merged_extras_sa],
+                        overwrite=False,
                     )
                 else:
                     _final_sa = self._extract_against_common(
@@ -159,7 +169,107 @@ class Merger:
                     common_base=_species_base, inpt_species={0: _merged_extras_sa}
                 )[0]
 
-            pass
+            _final_sa["target"] = f"cobblemon:{pok_name}"
+            if gcr_settings.POKEDEX_FIX:
+                _final_sa["implemented"] = True
+                if pick_mon:
+                    if pick_mon.is_pseudoform and gcr_settings.EXCLUDE_PSEUDOFORMS:
+                        _final_sa["implemented"] = False
+
+            outp = MergePokemon(
+                internal_name=pok_name,
+                name=merge_holder.original_holder.name,
+                dex_id=merge_holder.original_holder.dex_num,
+                picked_mon=pick_mon,
+                extra_mons=extras,
+                holder=merge_holder.original_holder,
+                species_addition=_final_sa,
+                spawn_pool=merge_holder.merged_spawn_data,
+            )
+            if (
+                DefaultNames.BASE_COBBLE_MOD not in merge_holder.original_holder.mons
+            ) and (
+                (
+                    not any(
+                        [
+                            p.parent_pack.is_mod
+                            for p in merge_holder.original_holder.mons.values()
+                        ]
+                    )
+                )
+                and (not gcr_settings.PROCESS_MODS)
+            ):
+                outp.species_base = merge_holder.extracted_addition.extracted_base
+            self.merged_mons[pok_name] = outp
+
+    def _export_mons(self, target_path: Path | None = None):
+        if target_path is None:
+            target_path = self._attached_combiner.output_pack_path
+
+        for pok_name, merge_mon in self.merged_mons.items():
+            pok_path_set: set[Path] = set()
+            if merge_mon.picked_mon is not None:
+                if (merge_mon.picked_mon.parent_pack.is_base) or (
+                    merge_mon.picked_mon.parent_pack.is_mod
+                    and (not gcr_settings.PROCESS_MODS)
+                ):
+                    # skip graphics
+                    pass
+                else:
+                    for resv in merge_mon.picked_mon.resolvers.values():
+                        pok_path_set.update(resv.get_all_paths())
+                    for form in merge_mon.picked_mon.forms.values():
+                        if (sd := form.sound_entry) is not None:
+                            pok_path_set.update(sd.get_all_files())
+                    pok_path_set.update(
+                        merge_mon.picked_mon._get_relevant_feature_files()
+                    )
+
+                for p in pok_path_set:
+                    if p:
+                        if p.is_dir():
+                            print(
+                                f"[e] - {p}"
+                            )  # TODO sometimes a "cobblemon\sounds\pokemon"
+                            continue  # appears here and fucks things up
+                        np = target_path / p.relative_to(
+                            merge_mon.picked_mon.parent_pack.folder_location
+                        )
+                        np.parent.mkdir(parents=True, exist_ok=True)
+                        try:
+                            shutil.move(p, np)
+                        except Exception:
+                            if np.exists():
+                                pass
+                            else:
+                                print(f"WARN: missed file: {(str(np))[:-25]}")
+                                pass
+
+            gen = merge_mon.holder._get_generation()
+            if not gen:
+                gen = "custom"
+            else:
+                gen = f"generation{gen}"
+
+            data_path = target_path / "data" / "cobblemon"
+            if merge_mon.species_base is not None:
+                sp_path = data_path / "species" / gen / f"{pok_name}.json"
+                sp_path.parent.mkdir(parents=True, exist_ok=True)
+                sp_path.write_text(json.dumps(merge_mon.species_base, indent=6))
+            if merge_mon.species_addition is not None:
+                sp_path = data_path / "species_additions" / gen / f"{pok_name}.json"
+                sp_path.parent.mkdir(parents=True, exist_ok=True)
+                sp_path.write_text(json.dumps(merge_mon.species_addition, indent=6))
+            if merge_mon.spawn_pool is not None:
+                sp_path = (
+                    data_path
+                    / "spawn_pool_world"
+                    / f"{(int(merge_mon.dex_id)):04d}_{pok_name}.json"
+                )
+                sp_path.parent.mkdir(parents=True, exist_ok=True)
+                sp_path.write_text(json.dumps(merge_mon.spawn_pool, indent=6))
+
+                pass
 
     def _process(self):
         _to_check: set[str] = self._attached_combiner.defined_pokemon.copy()
@@ -211,7 +321,7 @@ class Merger:
                 else:
                     _needs_choice[pok_name] = merge_data
 
-                self._monds_to_merge[pok_name] = merge_data
+                self._mons_to_merge[pok_name] = merge_data
 
         self.make_pack_choices(mon_packs=_needs_choice)
 
@@ -221,7 +331,7 @@ class Merger:
                 color=True, only_graphics=True, exclude_merged=True, show_merged=True
             )
             print(disp, end="\n\n")
-            if False:
+            if True:  # for debugging purposes
                 _err = None
                 while True:
                     print(clear_line, end="")
@@ -254,7 +364,7 @@ class Merger:
 
             merge_holder.pick = pick
 
-            self._monds_to_merge[pok_name] = merge_holder
+            self._mons_to_merge[pok_name] = merge_holder
 
     @staticmethod
     def merge(holder: PackHolder, _process_mods: bool = gcr_settings.PROCESS_MODS):

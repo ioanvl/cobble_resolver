@@ -237,7 +237,13 @@ class Pack:
                         ).exists():
                             break
 
-                shutil.move(p, np)
+                try:
+                    shutil.move(p, np)
+                except Exception as e:
+                    if np.exists():
+                        pass
+                    else:
+                        raise e
                 c += 1
         # -----------------------------------------
         if not export_path:
@@ -247,7 +253,7 @@ class Pack:
         del_flag = False
         try:
             for p in delete_set:
-                if p:
+                if p and p.exists():
                     p.unlink()
 
             self.component_location._delete_registered_paths()
@@ -303,8 +309,16 @@ class Pack:
             (l_path / f"{l_entry.name}").write_text(json.dumps(l_entry.data))
 
     def _get_lang_export(self) -> list[LangResultEntry]:
-        selected = [p for p in self.pokemon if self.pokemon[p].selected]
-        not_selected = [p for p in self.pokemon if (not self.pokemon[p].selected)]
+        selected = [
+            p
+            for p in self.pokemon
+            if (self.pokemon[p].selected or self.pokemon[p].merged)
+        ]
+        not_selected = [
+            p
+            for p in self.pokemon
+            if ((not self.pokemon[p].selected) and (not self.pokemon[p].merged))
+        ]
 
         res = list()
         for lang in self.lang_entries:
@@ -336,10 +350,10 @@ class Pack:
     def _get_sound_export(self) -> dict:
         res = dict()
         for pok in self.pokemon.values():
-            if pok.selected:
+            if pok.selected or pok.merged:
                 for form in pok.forms.values():
                     if form.sound_entry is not None:
-                        res.update(pok.sound_entry.data)
+                        res.update(form.sound_entry.data)
         return res
 
     # ============================================================
@@ -1135,9 +1149,11 @@ class Pack:
                     if x is not None:
                         flag = True
                         e_path = x.file_path
-                        if e_path not in _edited_files:
+                        if (e_path not in _edited_files) and e_path.exists():
                             data = json.loads(e_path.read_text())
                             data["implemented"] = True
+                            if pok.is_pseudoform and gcr_settings.EXCLUDE_PSEUDOFORMS:
+                                data["implemented"] = False
                             e_path.write_text(json.dumps(data, indent=8))
                             _edited_files.add(e_path)
             if not flag:

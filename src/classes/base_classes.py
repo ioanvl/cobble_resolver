@@ -103,6 +103,27 @@ class PackHolder:
             )
         ]
 
+    def _get_generation(self) -> str | None:
+        if DefaultNames.BASE_COBBLE_MOD in self.mons:
+            species_file = (
+                self.mons[DefaultNames.BASE_COBBLE_MOD]
+                .forms[DefaultNames.BASE_FORM]
+                .species.source
+            )
+            if "labels" in species_file:
+                for label in species_file["labels"]:
+                    if label.startswith("gen"):
+                        return label[-1]
+
+        for mon in self.mons.values():
+            for form in mon.forms.values():
+                if form.species is not None:
+                    species_file = form.species.source
+                    if "labels" in species_file:
+                        for label in species_file["labels"]:
+                            if label.startswith("gen"):
+                                return label[-1]
+
     def _get_graphics_keys(self) -> list[str]:
         return [k for k in self.mons.keys() if self.mons[k].has_graphics()]
 
