@@ -3,8 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
-from constants.runtime_const import gcr_settings, CrOpType
+
 from classes.base_classes import PackHolder
+from constants.runtime_const import CrOpType, gcr_settings
 from utils.text_utils import bcolors, c_text
 
 # from classes.sounds import SoundEntry

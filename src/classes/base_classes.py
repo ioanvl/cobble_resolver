@@ -4,9 +4,10 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
-from constants.text_constants import DefaultNames
+
 from constants.runtime_const import gcr_settings
-from utils.text_utils import c_text, bcolors
+from constants.text_constants import DefaultNames
+from utils.text_utils import bcolors, c_text
 
 if TYPE_CHECKING:
     from classes.pokemon import Pokemon

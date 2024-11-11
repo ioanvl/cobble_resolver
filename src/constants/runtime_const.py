@@ -49,7 +49,7 @@ SETTINGS_META = {
     "SPECIES_STRICT_KEY_MATCH": SettingMeta(hidden=True),
     # "SHOW_WARNING": SettingMeta(hidden=True),
     # Spacers
-    "POKEDEX_FIX": SettingMeta(after_spacer=True),
+    "POKEDEX_FIX": SettingMeta(after_spacer=True, hidden=True),
     "PROCESS_MODS": SettingMeta(after_spacer=True),
     "COMBINE_POKEMON_MOVES": SettingMeta(after_spacer=True),
 }
