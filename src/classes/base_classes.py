@@ -55,7 +55,7 @@ class LangEntry:
 @dataclass
 class LangResultEntry:
     name: str
-    data: dict
+    data: dict[str, str]
 
 
 @dataclass

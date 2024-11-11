@@ -94,16 +94,30 @@ class Combiner:
 
     def _export_langs(self, folder_path: Path) -> None:
         res_d: dict[str, LangResultEntry] = dict()
+        _accounted_merge_picks: set[str] = set()
         for p in self.packs:
             if p.is_base or (p.is_mod and (not gcr_settings.PROCESS_MODS)):
                 continue
             l_es: list[LangResultEntry] = p._get_lang_export()
 
             for entry in l_es:
-                if entry.name in res_d:
-                    res_d[entry.name].data.update(entry.data)
-                else:
-                    res_d[entry.name] = entry
+                if entry.name not in res_d:
+                    res_d[entry.name] = LangResultEntry(name=entry.name, data=dict())
+
+                for l_key, l_entry in entry.data.items():
+                    if l_key.startwith("cobblemon.species."):
+                        l_name = l_key.split(".")[2]
+                        if p.pokemon[l_name].merged:
+                            if p.pokemon[l_name].merge_pick:
+                                res_d[entry.name].data[l_key] = l_entry
+                                _accounted_merge_picks.add(l_key)
+                            else:
+                                if l_key not in _accounted_merge_picks:
+                                    res_d[entry.name].data[l_key] = l_entry
+                        else:
+                            res_d[entry.name].data[l_key] = l_entry
+                    else:
+                        res_d[entry.name].data[l_key] = l_entry
 
         export_path = folder_path / "assets" / "cobblemon" / "lang"
         export_path.mkdir(parents=True, exist_ok=True)
