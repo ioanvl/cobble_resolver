@@ -374,7 +374,7 @@ class Merger:
                 color=True, only_graphics=True, exclude_merged=True, show_merged=True
             )
             print(disp, end="\n\n")
-            if False:  # for debugging purposes
+            if True:  # for debugging purposes
                 _err = None
                 while True:
                     print(clear_line, end="")
