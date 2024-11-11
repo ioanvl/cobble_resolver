@@ -8,6 +8,7 @@ special_keys = {
     "\x08": "back",
     "\x1b": "esc",
     "\x03": "exit",
+    " ": "space",
 }
 
 win_extras = {
@@ -157,3 +158,10 @@ def positive_int_choice(max_ch: int = 9, text: str | None = None) -> int:
         prev_entry = k_in
 
     return k_in
+
+
+if __name__ == "__main__":
+    while True:
+        print(x := keypress())
+        if x == "exit":
+            exit()

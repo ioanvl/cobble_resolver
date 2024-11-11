@@ -154,12 +154,13 @@ class Combiner:
                                 if _selected_att is not None:
                                     break
                             if _selected_att is None:
-                                print(
-                                    cprint(
-                                        f"--! Found unmatched language entry: {l_key}",
-                                        color=bcolors.WARNING,
+                                if gcr_settings.SHOW_WARNING:
+                                    print(
+                                        cprint(
+                                            f"--! Found unmatched language entry: {l_key}",
+                                            color=bcolors.WARNING,
+                                        )
                                     )
-                                )
                                 if f"{entry.name}_{l_key}" not in _accounted_merge_picks:
                                     res_d[entry.name].data[l_key] = l_entry
                         else:
