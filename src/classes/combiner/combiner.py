@@ -110,9 +110,9 @@ class Combiner:
                         if p.pokemon[l_name].merged:
                             if p.pokemon[l_name].merge_pick:
                                 res_d[entry.name].data[l_key] = l_entry
-                                _accounted_merge_picks.add(l_key)
+                                _accounted_merge_picks.add(f"{entry.name}_{l_key}")
                             else:
-                                if l_key not in _accounted_merge_picks:
+                                if f"{entry.name}_{l_key}" not in _accounted_merge_picks:
                                     res_d[entry.name].data[l_key] = l_entry
                         else:
                             res_d[entry.name].data[l_key] = l_entry
