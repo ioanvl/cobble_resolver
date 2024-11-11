@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import random
 import shutil
 from dataclasses import dataclass, field
 from enum import Enum
@@ -198,6 +199,24 @@ class Merger:
             target_path = self._attached_combiner.output_pack_path
 
         for pok_name, merge_mon in self.merged_mons.items():
+            # move _other_ sounds first, _then_ we ll overwrite with selected
+            for s_mon in merge_mon.holder.mons.values():
+                if s_mon.parent_pack.is_base or (
+                    s_mon.parent_pack.is_mod and (not gcr_settings.PROCESS_MODS)
+                ):
+                    continue
+                sound_set: set[Path] = set()
+                if (merge_mon.picked_mon is not None) and (s_mon is merge_mon.picked_mon):
+                    continue
+                for s_form in s_mon.forms.values():
+                    if s_form.sound_entry is not None:
+                        sound_set.update(s_form.sound_entry.get_all_files())
+                Merger._move_path_set_to_target(
+                    path_set=sound_set,
+                    target_path=target_path,
+                    relative_to=s_mon.parent_pack.folder_location,
+                )
+
             pok_path_set: set[Path] = set()
             if merge_mon.picked_mon is not None:
                 if (merge_mon.picked_mon.parent_pack.is_base) or (
@@ -216,25 +235,30 @@ class Merger:
                         merge_mon.picked_mon._get_relevant_feature_files()
                     )
 
-                for p in pok_path_set:
-                    if p:
-                        if p.is_dir():
-                            print(
-                                f"[e] - {p}"
-                            )  # TODO sometimes a "cobblemon\sounds\pokemon"
-                            continue  # appears here and fucks things up
-                        np = target_path / p.relative_to(
-                            merge_mon.picked_mon.parent_pack.folder_location
-                        )
-                        np.parent.mkdir(parents=True, exist_ok=True)
-                        try:
-                            shutil.move(p, np)
-                        except Exception:
-                            if np.exists():
-                                pass
-                            else:
-                                print(f"WARN: missed file: {(str(np))[:-25]}")
-                                pass
+                Merger._move_path_set_to_target(
+                    path_set=pok_path_set,
+                    target_path=target_path,
+                    relative_to=merge_mon.picked_mon.parent_pack.folder_location,
+                )
+                # for p in pok_path_set:
+                #     if p:
+                #         if p.is_dir():
+                #             print(
+                #                 f"[er] - {p}"
+                #             )  # TODO sometimes a "cobblemon\sounds\pokemon"
+                #             continue  # appears here and fucks things up
+                #         np = target_path / p.relative_to(
+                #             merge_mon.picked_mon.parent_pack.folder_location
+                #         )
+                #         np.parent.mkdir(parents=True, exist_ok=True)
+                #         try:
+                #             shutil.move(p, np)
+                #         except Exception:
+                #             if np.exists():
+                #                 pass
+                #             else:
+                #                 print(f"WARN: missed file: {(str(np))[:-25]}")
+                #                 pass
 
             gen = merge_mon.holder._get_generation()
             if not gen:
@@ -261,6 +285,26 @@ class Merger:
                 sp_path.write_text(json.dumps(merge_mon.spawn_pool, indent=6))
 
                 pass
+
+    @staticmethod
+    def _move_path_set_to_target(
+        path_set: set[Path], target_path: Path, relative_to: Path
+    ):
+        for p in path_set:
+            if p:
+                if p.is_dir():
+                    print(f"[er] - {p}")  # TODO sometimes a "cobblemon\sounds\pokemon"
+                    continue  # appears here and fucks things up
+                np = target_path / p.relative_to(relative_to)
+                np.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    shutil.move(p, np)
+                except Exception:
+                    if np.exists():
+                        pass
+                    else:
+                        print(f"WARN: missed file: {(str(np))[:-25]}")
+                        pass
 
     def _process(self):
         _to_check: set[str] = self._attached_combiner.defined_pokemon.copy()
@@ -310,10 +354,15 @@ class Merger:
                         selection_type=cprint(text="===MERGE==", color=bcolors.WARNING),
                     )
                     # _checked.add(pok_name)
+                    if pack_name is not None:
+                        ph.mons[pack_name].merge_pick = True
                     merge_data.auto_pick = True
                     merge_data.pick = pack_name
                 else:
                     _needs_choice[pok_name] = merge_data
+
+                for _m_mon in ph.mons.values():
+                    _m_mon.merged = True
 
                 self._mons_to_merge[pok_name] = merge_data
 
@@ -325,7 +374,7 @@ class Merger:
                 color=True, only_graphics=True, exclude_merged=True, show_merged=True
             )
             print(disp, end="\n\n")
-            if True:  # for debugging purposes
+            if False:  # for debugging purposes
                 _err = None
                 while True:
                     print(clear_line, end="")
@@ -349,7 +398,7 @@ class Merger:
 
                 pick = keys[inp - 1]
             else:
-                pick = keys[0]
+                pick = keys[random.randrange(0, len(keys))]
 
             print(cprint(f"={'-'*15}", color=bcolors.WARNING))
             print(f"Selected: [{pick}]")

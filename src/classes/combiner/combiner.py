@@ -14,6 +14,7 @@ from constants.text_constants import DefaultNames, HelperText
 from utils.cli_utils.generic import line_header
 from utils.cli_utils.keypress import clear_line, positive_int_choice
 from utils.get_resource import get_resource_path
+from utils.text_utils import bcolors, cprint
 
 from .choice_rules import DualChoise_Risky, DualChoise_Simple
 
@@ -105,17 +106,71 @@ class Combiner:
                     res_d[entry.name] = LangResultEntry(name=entry.name, data=dict())
 
                 for l_key, l_entry in entry.data.items():
-                    if l_key.startwith("cobblemon.species."):
+                    if l_key.startswith("cobblemon.species."):
+                        _name_attempts: set[str] = set()
                         l_name = l_key.split(".")[2]
-                        if p.pokemon[l_name].merged:
-                            if p.pokemon[l_name].merge_pick:
-                                res_d[entry.name].data[l_key] = l_entry
-                                _accounted_merge_picks.add(f"{entry.name}_{l_key}")
-                            else:
+                        if l_name not in p.pokemon:
+                            _name_attempts.add(l_name)
+                            l_name = "".join(l_name.split("_"))
+                        if l_name not in p.pokemon:
+                            _name_attempts.add(l_name)
+                            l_name, aspect = p._extract_name_and_aspect(
+                                full_pokemon_string=l_key.split(".")[2],
+                                available_features=p.features,
+                            )
+                        if l_name not in p.pokemon:
+                            _name_attempts.add(l_name)
+                            l_name = "".join(l_name.split("_"))
+
+                        if l_name not in p.pokemon:
+                            _selected_att = None
+                            _name_attempts.add(l_name)
+                            for _attempt_pok in p.pokemon.values():
+                                if _attempt_pok.internal_name in _name_attempts:
+                                    _selected_att = _attempt_pok
+                                    break
+                                for _att_form in _attempt_pok.forms.values():
+                                    if _att_form.species is not None:
+                                        if (
+                                            _att_form.species.source.get(
+                                                "name", ""
+                                            ).lower()
+                                        ) in _name_attempts:
+                                            _selected_att = _attempt_pok
+                                            break
+                                    if _att_form.species_additions is not None:
+                                        _name_parts = (
+                                            _att_form.species_additions.source.get(
+                                                "target", "_:_"
+                                            ).lower()
+                                        ).split(":")
+                                        if len(_name_parts) > 1:
+                                            __att_name = _name_parts[1]
+                                        else:
+                                            __att_name = _name_parts[0]
+                                        if __att_name in _name_attempts:
+                                            _selected_att = _attempt_pok
+                                            break
+                                if _selected_att is not None:
+                                    break
+                            if _selected_att is None:
+                                print(
+                                    cprint(
+                                        f"--! Found unmatched language entry: {l_key}",
+                                        color=bcolors.WARNING,
+                                    )
+                                )
                                 if f"{entry.name}_{l_key}" not in _accounted_merge_picks:
                                     res_d[entry.name].data[l_key] = l_entry
                         else:
-                            res_d[entry.name].data[l_key] = l_entry
+                            if p.pokemon[l_name].merged:
+                                if p.pokemon[l_name].merge_pick:
+                                    res_d[entry.name].data[l_key] = l_entry
+                                    _accounted_merge_picks.add(f"{entry.name}_{l_key}")
+                            else:
+                                if f"{entry.name}_{l_key}" not in _accounted_merge_picks:
+                                    res_d[entry.name].data[l_key] = l_entry
+
                     else:
                         res_d[entry.name].data[l_key] = l_entry
 
@@ -126,10 +181,22 @@ class Combiner:
 
     def _export_sound_json(self, folder_path: Path):
         res = dict()
+        _accounted_merge_picks: set[str] = set()
         for p in self.packs:
             if p.is_base or (p.is_mod and (not gcr_settings.PROCESS_MODS)):
                 continue
-            res.update(p._get_sound_export())
+            for s_pok in p.pokemon.values():
+                if s_pok.selected:
+                    res.update(s_pok.get_sound_export())
+                if s_pok.merged:
+                    pok_sounds = s_pok.get_sound_export()
+                    if s_pok.merge_pick:
+                        res.update(pok_sounds)
+                        _accounted_merge_picks.update(list(pok_sounds.keys()))
+                    else:
+                        for s_key, s_entry in pok_sounds.items():
+                            if s_key not in _accounted_merge_picks:
+                                res[s_key] = s_entry
 
         (folder_path / "assets" / "cobblemon" / "sounds.json").write_text(
             json.dumps(res, indent=4)

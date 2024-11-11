@@ -5,8 +5,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from classes.base_classes import PackHolder
-from classes.sounds import SoundEntry
 from utils.text_utils import bcolors, cprint
+
+# from classes.sounds import SoundEntry
 
 if TYPE_CHECKING:
     from classes.evolutions import EvolutionEntry
@@ -40,7 +41,7 @@ class Pokemon:
     forms: dict[str, PokemonForm] = field(default_factory=dict)
     resolvers: dict[int, ResolverEntry] = field(default_factory=dict)
 
-    sound_entry: SoundEntry | None = None
+    # sound_entry: SoundEntry | None = None
 
     parent_pack: Optional["Pack"] = None
     selected: bool = False
@@ -104,7 +105,7 @@ class Pokemon:
                 )
         return False
 
-    def get_all_export_paths(self):
+    def get_all_export_paths(self) -> list[Path]:
         res: set[Path] = set()
         for form in self.forms.values():
             res.update(form.get_all_paths())
@@ -112,6 +113,13 @@ class Pokemon:
         res.update(self.sa_transfers_received)
         res.update(self._get_relevant_feature_files())
         return list(res)
+
+    def get_sound_export(self) -> dict:
+        res = dict()
+        for form in self.forms.values():
+            if form.sound_entry is not None:
+                res.update(form.sound_entry.data)
+        return res
 
     def get_all_paths(self) -> set[Path]:
         res: set[Path] = set()
