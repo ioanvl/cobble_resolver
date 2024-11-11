@@ -136,45 +136,35 @@ class Merger:
             for ex in extras:
                 if ex_sa := merge_holder.original_holder.mons[ex]._extracted_sa:
                     extra_sas.append(ex_sa)
-            _merged_extras_sa = self._merge_species_with_sas(
-                species=dict(),
+            _final_species = self._merge_species_with_sas(
+                species=_species_base,
                 species_additions=extra_sas,
                 overwrite=False,
                 include=True,
             )
 
-            _merged_extras_sa = self._extract_against_common(
-                common_base=_species_base,
-                inpt_species={0: _merged_extras_sa},
-            )[0]
+            # _merged_extras_sa = self._extract_against_common(
+            #     common_base=_species_base,
+            #     inpt_species={0: _merged_extras_sa},
+            # )[0]
 
             if pick_mon:
                 if (not pick_mon.parent_pack.is_base) or (
                     pick_mon.parent_pack.is_mod and (not gcr_settings.PROCESS_MODS)
                 ):
-                    _final_sa = pick_mon._extracted_sa
-                    _final_sa = self._merge_species_with_sas(
-                        species=_final_sa,
-                        species_additions=[_merged_extras_sa],
-                        overwrite=False,
+                    _final_species = self._merge_species_with_sas(
+                        species=_final_species,
+                        species_additions=[pick_mon._extracted_sa],
+                        overwrite=True,
+                        include=True,
                     )
-                else:
-                    _final_sa = self._extract_against_common(
-                        common_base=pick_mon.forms[DefaultNames.BASE_FORM].species.source,
-                        inpt_species={0: _merged_extras_sa},
-                        exclude_existing=True,
-                    )[0]
-            else:
-                _final_sa = self._extract_against_common(
-                    common_base=_species_base, inpt_species={0: _merged_extras_sa}
-                )[0]
 
-            _final_sa["target"] = f"cobblemon:{pok_name}"
+            # _final_sa["target"] = f"cobblemon:{pok_name}"
             if gcr_settings.POKEDEX_FIX:
-                _final_sa["implemented"] = True
+                _final_species["implemented"] = True
                 if pick_mon:
                     if pick_mon.is_pseudoform and gcr_settings.EXCLUDE_PSEUDOFORMS:
-                        _final_sa["implemented"] = False
+                        _final_species["implemented"] = False
 
             outp = MergePokemon(
                 internal_name=pok_name,
@@ -183,23 +173,24 @@ class Merger:
                 picked_mon=pick_mon,
                 extra_mons=extras,
                 holder=merge_holder.original_holder,
-                species_addition=_final_sa,
+                # species_addition=_final_sa,
                 spawn_pool=merge_holder.merged_spawn_data,
+                species_base=_final_species,
             )
-            if (
-                DefaultNames.BASE_COBBLE_MOD not in merge_holder.original_holder.mons
-            ) and (
-                (
-                    not any(
-                        [
-                            p.parent_pack.is_mod
-                            for p in merge_holder.original_holder.mons.values()
-                        ]
-                    )
-                )
-                and (not gcr_settings.PROCESS_MODS)
-            ):
-                outp.species_base = merge_holder.extracted_addition.extracted_base
+            # if (
+            #     DefaultNames.BASE_COBBLE_MOD not in merge_holder.original_holder.mons
+            # ) and (
+            #     (
+            #         not any(
+            #             [
+            #                 p.parent_pack.is_mod
+            #                 for p in merge_holder.original_holder.mons.values()
+            #             ]
+            #         )
+            #     )
+            #     and (not gcr_settings.PROCESS_MODS)
+            # ):
+            #     outp.species_base = merge_holder.extracted_addition.extracted_base
             self.merged_mons[pok_name] = outp
 
     def _export_mons(self, target_path: Path | None = None):
