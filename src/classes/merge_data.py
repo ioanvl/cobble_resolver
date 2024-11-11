@@ -275,6 +275,9 @@ class Merger:
                 pokemon_name=pok_name
             )
 
+            if pok_name in ["indeedee", "pyroar", "irontreads"]:
+                pass  # TODO debug
+
             if len(ph) == 1:
                 if ph.has_base():
                     continue
@@ -390,9 +393,9 @@ class Merger:
         _proc_mons = [
             m
             for m in mons
-            if not (
-                (m.parent_pack.is_mod and (not _process_mods)) or m.parent_pack.is_base
-            )
+            # if not (
+            #     (m.parent_pack.is_mod and (not _process_mods)) or m.parent_pack.is_base
+            # )   #TODO check- I THINK thats a better approach?..
         ]
         _flat_forms = [f for m in _proc_mons for f in m.forms.values()]
 

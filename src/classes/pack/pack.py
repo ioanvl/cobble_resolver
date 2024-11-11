@@ -492,6 +492,8 @@ class Pack:
         self._get_pokemon()
         self._get_lang()
 
+        self._detect_pseudoforms()
+
         self._get_sounds()
 
         self._stamp_forms()
@@ -530,6 +532,38 @@ class Pack:
         # ---------------
         # process?
         # ---------------
+
+    # ------------------------------------------------------------
+
+    def _detect_pseudoforms(self) -> None:
+        tally: dict[str, list[Pokemon]] = dict()
+
+        for p in self.pokemon.values():
+            if (x := p.forms[DefaultNames.BASE_FORM].species) is not None:
+                name = x.source.get("name", None)
+                if name is None:
+                    continue
+                lang = [la for la in self.lang_entries if la.name == "en_us"]
+                if lang:
+                    lang: LangEntry = lang[0]
+
+                    if (key := f"cobblemon.species.{name}.name") in lang:
+                        name = lang[key]
+
+                if name not in tally:
+                    tally[name] = list()
+                tally[name].append(p)
+
+        for p_name, mons in tally.items():
+            if len(mons) > 1:
+                orig = [mon for mon in mons if mon.internal_name == p_name.lower()]
+                if orig:
+                    if len(orig) > 1:
+                        print("!! PSEUDOFORM CHECK: Multiple with same internal name..")
+                    orig = orig[0]
+                    for ps_mon in mons:
+                        if ps_mon is not orig:
+                            ps_mon.is_pseudoform = True
 
     # ------------------------------------------------------------
 

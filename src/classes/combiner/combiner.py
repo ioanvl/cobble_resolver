@@ -95,6 +95,8 @@ class Combiner:
     def _export_langs(self, folder_path: Path) -> None:
         res_d: dict[str, LangResultEntry] = dict()
         for p in self.packs:
+            if p.is_base or (p.is_mod and (not gcr_settings.PROCESS_MODS)):
+                continue
             l_es: list[LangResultEntry] = p._get_lang_export()
 
             for entry in l_es:
@@ -111,6 +113,8 @@ class Combiner:
     def _export_sound_json(self, folder_path: Path):
         res = dict()
         for p in self.packs:
+            if p.is_base or (p.is_mod and (not gcr_settings.PROCESS_MODS)):
+                continue
             res.update(p._get_sound_export())
 
         (folder_path / "assets" / "cobblemon" / "sounds.json").write_text(
