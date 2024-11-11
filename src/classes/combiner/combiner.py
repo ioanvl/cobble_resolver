@@ -14,7 +14,7 @@ from constants.text_constants import DefaultNames, HelperText
 from utils.cli_utils.generic import line_header
 from utils.cli_utils.keypress import clear_line, positive_int_choice
 from utils.get_resource import get_resource_path
-from utils.text_utils import bcolors, cprint
+from utils.text_utils import bcolors, c_text
 
 from .choice_rules import DualChoise_Risky, DualChoise_Simple
 
@@ -156,7 +156,7 @@ class Combiner:
                             if _selected_att is None:
                                 if gcr_settings.SHOW_WARNING:
                                     print(
-                                        cprint(
+                                        c_text(
                                             f"--! Found unmatched language entry: {l_key}",
                                             color=bcolors.WARNING,
                                         )

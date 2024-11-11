@@ -9,7 +9,7 @@ from classes.merge_data import MergeStatus, merge_color_assignment, MergeST
 from classes.sounds import SoundEntry
 from constants.text_constants import DefaultNames, TextSymbols
 from utils.cli_utils.generic import bool_square
-from utils.text_utils import cprint
+from utils.text_utils import c_text
 
 if TYPE_CHECKING:
     from classes.pack import Pack
@@ -81,7 +81,7 @@ class PokemonForm:
             ret += f"{s} {self.name if self.name else self.aspects}\n"
         ret += f"{s} "
         ret += "DATA: "
-        ret += cprint(
+        ret += c_text(
             f"Spawn:{bool_square(self.spawn_pool)} ",
             color=(
                 merge_color_assignment[
@@ -94,7 +94,7 @@ class PokemonForm:
             ),
         )
         ret += "| "
-        ret += cprint(
+        ret += c_text(
             f"S:{bool_square(self.species)}",
             color=(
                 merge_color_assignment[
@@ -107,7 +107,7 @@ class PokemonForm:
             ),
         )
         ret += "/"
-        ret += cprint(
+        ret += c_text(
             f"{bool_square(self.species_additions)}:SA ",
             color=(
                 merge_color_assignment[

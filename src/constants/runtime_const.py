@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Optional, Union
 
 from utils.cli_utils.keypress import clear, keypress
-from utils.text_utils import bcolors, cprint
+from utils.text_utils import bcolors, c_text
 
 DEBUG = False
 
@@ -100,9 +100,9 @@ def settings_menu(settings: CRSettings) -> Optional[CRSettings]:
 
             # Apply color based on state
             if not enabled:
-                print(cprint(line, color=bcolors.FAIL))
+                print(c_text(line, color=bcolors.FAIL))
             elif i == selected_index:
-                print(cprint(line, color=bcolors.OKCYAN))
+                print(c_text(line, color=bcolors.OKCYAN))
             else:
                 print(line)
 

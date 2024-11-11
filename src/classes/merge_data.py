@@ -17,7 +17,7 @@ from utils.cli_utils.keypress import clear_line, keypress
 from utils.dict_utils import combine
 from utils.dict_utils_transitive import compare
 from utils.get_resource import load_json_from_path
-from utils.text_utils import bcolors, cprint, next_candidate_name
+from utils.text_utils import bcolors, c_text, next_candidate_name
 
 if TYPE_CHECKING:
     from classes.combiner.combiner import Combiner
@@ -351,7 +351,7 @@ class Merger:
                         number=ph.dex_num,
                         name=ph.name,
                         selected_pack=pack_name,
-                        selection_type=cprint(text="===MERGE==", color=bcolors.WARNING),
+                        selection_type=c_text(text="===MERGE==", color=bcolors.WARNING),
                     )
                     # _checked.add(pok_name)
                     if pack_name is not None:
@@ -400,9 +400,9 @@ class Merger:
             else:
                 pick = keys[random.randrange(0, len(keys))]
 
-            print(cprint(f"={'-'*15}", color=bcolors.WARNING))
+            print(c_text(f"={'-'*15}", color=bcolors.WARNING))
             print(f"Selected: [{pick}]")
-            print(cprint(f"={'-'*15}", color=bcolors.WARNING))
+            print(c_text(f"={'-'*15}", color=bcolors.WARNING))
             print("=" * 25)
 
             merge_holder.pick = pick

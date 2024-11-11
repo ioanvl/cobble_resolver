@@ -17,7 +17,7 @@ class bcolors(Enum):
         return str(self.value)
 
 
-def cprint(text: str, color: bcolors | None = None) -> str:
+def c_text(text: str, color: bcolors | None = None) -> str:
     color = color or bcolors.ENDC
     return f"{color}{text}{bcolors.ENDC}"
 

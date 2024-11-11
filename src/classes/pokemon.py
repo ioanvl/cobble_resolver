@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from classes.base_classes import PackHolder
-from utils.text_utils import bcolors, cprint
+from utils.text_utils import bcolors, c_text
 
 # from classes.sounds import SoundEntry
 
@@ -160,7 +160,7 @@ class Pokemon:
     ):
         ret: str = f"#{self.dex_id} - "
         if self.is_pseudoform:
-            ret += f"[{cprint(text="PF", color=bcolors.WARNING)}]"
+            ret += f"[{c_text(text="PF", color=bcolors.WARNING)}]"
         if self.name is None:
             ret += f"[{self.internal_name}]"
         else:

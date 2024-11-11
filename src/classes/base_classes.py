@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from constants.text_constants import DefaultNames
 from constants.runtime_const import gcr_settings
-from utils.text_utils import cprint, bcolors
+from utils.text_utils import c_text, bcolors
 
 if TYPE_CHECKING:
     from classes.pokemon import Pokemon
@@ -160,7 +160,7 @@ class PackHolder:
                 if ((k not in keys) and k != DefaultNames.BASE_COBBLE_MOD)
             ]
             _temp = [
-                cprint(k, color=None if (not color) else self._entry_color(self.mons[k]))
+                c_text(k, color=None if (not color) else self._entry_color(self.mons[k]))
                 for k in _temp
             ]
             if _temp:
@@ -178,7 +178,7 @@ class PackHolder:
             )
             out_parts = outp.split("\n")
 
-            out_parts[0] = cprint(
+            out_parts[0] = c_text(
                 f"{i+1}. {pack_name}",
                 color=None if (not color) else self._entry_color(mon=self.mons[k]),
             )
