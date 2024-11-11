@@ -2,7 +2,7 @@ from pathlib import Path
 
 from classes.combiner import Combiner
 from classes.pack import Pack
-from constants.runtime_const import CRSettings, CrOpType, gcr_settings, settings_menu
+from constants.runtime_const import CrOpType, gcr_settings, settings_menu
 
 # TODO previous choice(s)
 # stack and push pop, and move, etc
@@ -65,9 +65,10 @@ if __name__ == "__main__":
         p.export(selected=False)
 
     elif RUN_TYPE == 4:
-        settings = CRSettings()
-        new_settings = settings_menu(settings)
-        if new_settings:
-            print("Settings updated!")
-        else:
-            print("Operation cance`lled")
+        while True:
+            new_settings = settings_menu(gcr_settings)
+
+            print("\n\n")
+            print(gcr_settings)
+
+            _ = input()

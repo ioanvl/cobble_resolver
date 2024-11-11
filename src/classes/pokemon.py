@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
-
+from constants.runtime_const import gcr_settings, CrOpType
 from classes.base_classes import PackHolder
 from utils.text_utils import bcolors, c_text
 
@@ -110,7 +110,8 @@ class Pokemon:
         for form in self.forms.values():
             res.update(form.get_all_paths())
 
-        res.update(self.sa_transfers_received)
+        if gcr_settings.OP_MODE == CrOpType.PICK:
+            res.update(self.sa_transfers_received)
         res.update(self._get_relevant_feature_files())
         return list(res)
 
