@@ -6,7 +6,8 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[
-        ('src\\images\\cob_pack.png','src/images'),
+        ('src\\images\\pack_icon.png','src/images'),
+        ('src\\images\\alt_pack_icon.png','src/images'),
     ],
     hiddenimports=[],
     hookspath=[],
