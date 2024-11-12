@@ -97,7 +97,12 @@ class Combiner:
 
     def _get_icon(self) -> None:
         try:
-            icon_path = Path(get_resource_path("src/images/cob_pack.png"))
+            _icon = (
+                DefaultNames.ALT_ICON
+                if gcr_settings.ALTERNATE_ICON
+                else DefaultNames.ICON_NAME
+            )
+            icon_path = Path(get_resource_path(f"src/images/{_icon}.png"))
             shutil.copy(
                 icon_path,
                 (self.output_pack_path / "pack.png"),

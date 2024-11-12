@@ -18,6 +18,8 @@ class DefaultNames:
     BASE_COBBLE_MOD = "BASE"
     FINAL_PACK_NAME = "CobbleResolver_Pack"
     REMAINDER_PACK_PREFIX = "[CE]"
+    ICON_NAME = "pack_icon"
+    ALT_ICON = "alt_pack_icon"
 
 
 class HelperText:
