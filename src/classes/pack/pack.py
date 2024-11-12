@@ -298,8 +298,6 @@ class Pack:
             if (self.folder_location / "assets").exists():
                 _tag += "R"
             if (self.folder_location / "data").exists():
-                if _tag:
-                    _tag += "|"
                 _tag += "D"
             if _tag:
                 _tag = "[" + _tag + "]"
