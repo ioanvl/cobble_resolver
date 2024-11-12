@@ -4,12 +4,32 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
-from classes.sounds import SoundEntry
+from classes.base_classes import PackHolder
+from constants.runtime_const import CrOpType, gcr_settings
+from utils.text_utils import bcolors, c_text
+
+# from classes.sounds import SoundEntry
 
 if TYPE_CHECKING:
     from classes.evolutions import EvolutionEntry
     from classes.pack import Pack
     from classes.pokemon_form import PokemonForm, ResolverEntry
+
+
+@dataclass
+class MergePokemon:
+    internal_name: str
+    name: str | None = None
+    dex_id: int | None = None
+
+    species_base: dict | None = None
+    species_addition: dict | None = None
+    spawn_pool: dict | None = None
+
+    picked_mon: Pokemon | None = None
+    extra_mons: list[str] = field(default_factory=list)
+
+    holder: PackHolder | None = None
 
 
 @dataclass
@@ -22,15 +42,21 @@ class Pokemon:
     forms: dict[str, PokemonForm] = field(default_factory=dict)
     resolvers: dict[int, ResolverEntry] = field(default_factory=dict)
 
-    sound_entry: SoundEntry | None = None
+    # sound_entry: SoundEntry | None = None
 
     parent_pack: Optional["Pack"] = None
     selected: bool = False
+    merged: bool = False
+    merge_pick: bool = False
 
     requested: int = 0
     request_transfered: int = 0
 
     sa_transfers_received: set[Path] = field(default_factory=set)
+
+    _extracted_sa: dict = field(default_factory=dict)
+
+    is_pseudoform: bool = False
 
     pre_evos: int = 0
     evos: int = 0
@@ -80,15 +106,22 @@ class Pokemon:
                 )
         return False
 
-    def get_all_export_paths(self):
+    def get_all_export_paths(self) -> list[Path]:
         res: set[Path] = set()
         for form in self.forms.values():
             res.update(form.get_all_paths())
-        if self.sound_entry is not None:
-            res.update(self.sound_entry.get_all_files())
-        res.update(self.sa_transfers_received)
+
+        if gcr_settings.OP_MODE == CrOpType.CHOOSE:
+            res.update(self.sa_transfers_received)
         res.update(self._get_relevant_feature_files())
         return list(res)
+
+    def get_sound_export(self) -> dict:
+        res = dict()
+        for form in self.forms.values():
+            if form.sound_entry is not None:
+                res.update(form.sound_entry.data)
+        return res
 
     def get_all_paths(self) -> set[Path]:
         res: set[Path] = set()
@@ -113,8 +146,23 @@ class Pokemon:
                         res.add(pf.file_path)
         return res
 
-    def __repr__(self) -> str:
+    def is_fully_data_merged(self):
+        return all([f.is_fully_data_merged() for f in self.forms.values()])
+
+    def is_partially_data_merged(self):
+        return any([f.is_fully_data_merged() for f in self.forms.values()]) or any(
+            [f.is_partially_data_merged() for f in self.forms.values()]
+        )
+
+    def _display(
+        self,
+        color: bool = True,
+        exclude_merged: bool = False,
+        merge_mode: bool = False,
+    ):
         ret: str = f"#{self.dex_id} - "
+        if self.is_pseudoform:
+            ret += f"[{c_text(text="PF", color=bcolors.WARNING)}]"
         if self.name is None:
             ret += f"[{self.internal_name}]"
         else:
@@ -122,15 +170,11 @@ class Pokemon:
 
         for f in self.forms.values():
             ret += "\n"
-            pok_f: str = repr(f)
-            if al := len(f.resolver_assignments):
-                p_parts = pok_f.split("\n")
-                p_parts.append(p_parts[-1])
-                p_parts[-2] = (
-                    f"{f._st()} {repr(self.resolvers[list(f.resolver_assignments)[0]])}"
-                )
-                if al > 1:
-                    p_parts[-2] = p_parts[-2] + f"  +{al-1}"
-                pok_f = "\n".join(p_parts)
-            ret += pok_f
+            ret += f._display(color=color, merge_mode=merge_mode)
         return ret
+
+    def __repr__(self) -> str:
+        return self._display(color=False)
+
+    def has_graphics(self):
+        return bool(self.resolvers)

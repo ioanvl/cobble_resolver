@@ -1,15 +1,16 @@
 from pathlib import Path
-from classes.pack import Pack
-from classes.combiner import Combiner
 
+from classes.combiner import Combiner
+from classes.pack import Pack
+from constants.runtime_const import CrOpType, gcr_settings, settings_menu
 
 # TODO previous choice(s)
 # stack and push pop, and move, etc
 
 # TODO ...merging?
 
-RUN_TYPE = 2
-SELECTED_PACK = [1, 3, 7]
+RUN_TYPE = 4
+SELECTED_PACK = [2]
 
 if __name__ == "__main__":
     if RUN_TYPE == 0:
@@ -46,6 +47,7 @@ if __name__ == "__main__":
         comb.run()
     elif RUN_TYPE == 2:
         # try:
+        gcr_settings.OP_MODE = CrOpType(1)
         comb = Combiner()
         comb.run()
         # except Exception as e:
@@ -61,3 +63,12 @@ if __name__ == "__main__":
         p.run()
         p.display()
         p.export(selected=False)
+
+    elif RUN_TYPE == 4:
+        while True:
+            new_settings = settings_menu(gcr_settings)
+
+            print("\n\n")
+            print(gcr_settings)
+
+            _ = input()

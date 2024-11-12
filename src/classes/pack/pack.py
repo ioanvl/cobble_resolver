@@ -8,14 +8,6 @@ from json import JSONDecodeError
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from constants.generic import default_animation_types
-from constants.runtime_const import DEBUG
-from constants.text_constants import DefaultNames, TextSymbols
-from utils.cli_utils.generic import bool_square
-from utils.cli_utils.keypress import clear_line
-from utils.directory_utils import clear_empty_dir
-from utils.safe_parse_deco import safe_parse_per_file
-
 from classes.base_classes import (
     Feature,
     FeatureAssignment,
@@ -29,6 +21,14 @@ from classes.pack.poser_parser import PoserResolver
 from classes.pokemon import Pokemon
 from classes.pokemon_form import PokemonForm, ResolverEntry
 from classes.sounds import SoundPack
+from constants.generic import default_animation_types
+from constants.runtime_const import DEBUG, CrOpType, gcr_settings
+from constants.text_constants import DefaultNames, TextSymbols
+from utils.cli_utils.generic import bool_square
+from utils.cli_utils.keypress import clear_line
+from utils.directory_utils import clear_empty_dir
+from utils.safe_parse_deco import safe_parse_per_file
+from utils.text_utils import next_candidate_name
 
 if TYPE_CHECKING:
     from classes.combiner import Combiner
@@ -213,7 +213,37 @@ class Pack:
                 np = output_path / p.relative_to(self.folder_location)
                 np.parent.mkdir(parents=True, exist_ok=True)
 
-                shutil.move(p, np)
+                if np.exists() and (
+                    (
+                        (
+                            (np.parent == "species_additions")
+                            or (np.parent.parent == "species_additions")
+                        )
+                        and gcr_settings.KEEP_DUPLICATE_SAS_ON_MOVE
+                    )
+                    or (
+                        (
+                            (np.parent == "spawn_pool_world")
+                            or (np.parent.parent == "spawn_pool_world")
+                        )
+                        and gcr_settings.KEEP_DUPLICATE_SPAWNS_ON_MOVE
+                    )
+                ):
+                    while True:
+                        candidate_name = np.stem
+                        candidate_name = next_candidate_name(candidate_name)
+                        if not (
+                            np := (np.parent / f"{candidate_name}.{np.suffix}")
+                        ).exists():
+                            break
+
+                try:
+                    shutil.move(p, np)
+                except Exception as e:
+                    if np.exists():
+                        pass
+                    else:
+                        raise e
                 c += 1
         # -----------------------------------------
         if not export_path:
@@ -223,7 +253,7 @@ class Pack:
         del_flag = False
         try:
             for p in delete_set:
-                if p:
+                if p and p.exists():
                     p.unlink()
 
             self.component_location._delete_registered_paths()
@@ -252,7 +282,9 @@ class Pack:
         if isinstance(move_leftovers, Path) and del_flag:
             mv_count = self._move_leftovers(export_path=move_leftovers)
 
-        outp = f"{c} Moved "
+        outp = ""
+        if gcr_settings.OP_MODE == CrOpType.CHOOSE:
+            outp += f"{c} Moved "
         if d := (len(path_set) - c):
             outp += f"- {d} Missed "
         if mv_count:
@@ -264,8 +296,16 @@ class Pack:
 
     def _move_leftovers(self, export_path: Path) -> int | None:
         if x := (len([i for i in self.folder_location.rglob("*") if i.is_dir()])):
+            _tag = ""
+            if (self.folder_location / "assets").exists():
+                _tag += "R"
+            if (self.folder_location / "data").exists():
+                _tag += "D"
+            if _tag:
+                _tag = "[" + _tag + "]"
+            _tag = DefaultNames.REMAINDER_PACK_PREFIX + _tag
             shutil.make_archive(
-                f"{str((export_path / f"[ce]_{self.name}"))}",
+                f"{str((export_path / f"{_tag}_{self.name}"))}",
                 format="zip",
                 root_dir=str(self.folder_location),
             )
@@ -279,8 +319,16 @@ class Pack:
             (l_path / f"{l_entry.name}").write_text(json.dumps(l_entry.data))
 
     def _get_lang_export(self) -> list[LangResultEntry]:
-        selected = [p for p in self.pokemon if self.pokemon[p].selected]
-        not_selected = [p for p in self.pokemon if (not self.pokemon[p].selected)]
+        selected = [
+            p
+            for p in self.pokemon
+            if (self.pokemon[p].selected or self.pokemon[p].merged)
+        ]
+        not_selected = [
+            p
+            for p in self.pokemon
+            if ((not self.pokemon[p].selected) and (not self.pokemon[p].merged))
+        ]
 
         res = list()
         for lang in self.lang_entries:
@@ -312,9 +360,10 @@ class Pack:
     def _get_sound_export(self) -> dict:
         res = dict()
         for pok in self.pokemon.values():
-            if pok.selected:
-                if pok.sound_entry is not None:
-                    res.update(pok.sound_entry.data)
+            if pok.selected or pok.merged:
+                for form in pok.forms.values():
+                    if form.sound_entry is not None:
+                        res.update(form.sound_entry.data)
         return res
 
     # ============================================================
@@ -453,6 +502,8 @@ class Pack:
         self._get_pokemon()
         self._get_lang()
 
+        self._detect_pseudoforms()
+
         self._get_sounds()
 
         self._stamp_forms()
@@ -491,6 +542,38 @@ class Pack:
         # ---------------
         # process?
         # ---------------
+
+    # ------------------------------------------------------------
+
+    def _detect_pseudoforms(self) -> None:
+        tally: dict[str, list[Pokemon]] = dict()
+
+        for p in self.pokemon.values():
+            if (x := p.forms[DefaultNames.BASE_FORM].species) is not None:
+                name = x.source.get("name", None)
+                if name is None:
+                    continue
+                lang = [la for la in self.lang_entries if la.name == "en_us"]
+                if lang:
+                    lang: LangEntry = lang[0]
+
+                    if (key := f"cobblemon.species.{name}.name") in lang:
+                        name = lang[key]
+
+                if name not in tally:
+                    tally[name] = list()
+                tally[name].append(p)
+
+        for p_name, mons in tally.items():
+            if len(mons) > 1:
+                orig = [mon for mon in mons if mon.internal_name == p_name.lower()]
+                if orig:
+                    if len(orig) > 1:
+                        print("!! PSEUDOFORM CHECK: Multiple with same internal name..")
+                    orig = orig[0]
+                    for ps_mon in mons:
+                        if ps_mon is not orig:
+                            ps_mon.is_pseudoform = True
 
     # ------------------------------------------------------------
 
@@ -670,8 +753,10 @@ class Pack:
 
         for spawn_entry in spawns:
             pok: str = spawn_entry["pokemon"]
-            pok_parts: list[str] = pok.split(" ")
-            pok_name: str = pok_parts[0]
+
+            pok_name, aspect = self._extract_name_and_aspect(
+                full_pokemon_string=pok, available_features=self.features
+            )
 
             if pok_name not in self.pokemon:
                 if DEBUG:
@@ -685,58 +770,16 @@ class Pack:
                     },
                 )
 
-            aspect = ""
-            if len(pok_parts) > 1:  # try to find an aspect
-                feat_parts: list[str] = pok_parts[1].split("=")
-
-                if len(feat_parts) > 1:  # choice
-                    feat_name: str = feat_parts[0]
-                    feat_choice: str = feat_parts[1]
-
-                    if feat_choice.lower() in [
-                        "true",
-                        "false",
-                    ]:  # fix for some dumb stuff
-                        if feat_choice.lower() == "true":
-                            aspect = feat_parts[0]
-                    elif feat_name.lower() == "form":  # fix other dumb stuff
-                        if feat_choice.lower() in self.pokemon[pok_name].forms:
-                            self.pokemon[pok_name].forms[
-                                feat_choice.lower()
-                            ].spawn_pool.append(input_file_path)
-                            self.pokemon[pok_name].forms[
-                                feat_choice.lower()
-                            ].spawn_pool = list(
-                                set(
-                                    self.pokemon[pok_name]
-                                    .forms[feat_choice.lower()]
-                                    .spawn_pool
-                                )
-                            )
-                            continue
-                    else:
-                        selected = ""
-                        if feat_name in self.features:
-                            selected = self.features[feat_name].source["aspectFormat"]
-                        else:
-                            for val in self.features.values():
-                                if feat_name in val.keys:
-                                    selected = val.source["aspectFormat"]
-                                    break
-                        if selected:
-                            aspect = selected.replace("{{choice}}", feat_choice)
-                else:
-                    aspect = feat_parts[0]
-
             if aspect:  # if you found an aspect, match it or create
-                flag = False
-                for form in self.pokemon[pok_name].forms.values():
-                    if aspect in form.aspects:
+                if relevant_forms := self._match_aspect_to_form(
+                    aspect=aspect, pokemon=self.pokemon[pok_name]
+                ):
+                    for form in relevant_forms:
                         form.spawn_pool.append(input_file_path)
                         form.spawn_pool = list(set(form.spawn_pool))
-                        flag = True
-                if not flag:
-                    new_form = PokemonForm(name=f"--{aspect}")
+                else:
+                    # new_form = PokemonForm(name=f"--{aspect}")
+                    new_form = PokemonForm(name=f"--{aspect}", aspects=[aspect])
                     new_form.spawn_pool.append(input_file_path)
                     self.pokemon[pok_name].forms[new_form.name] = new_form
 
@@ -747,6 +790,60 @@ class Pack:
                 self.pokemon[pok_name].forms[DefaultNames.BASE_FORM].spawn_pool = list(
                     set(self.pokemon[pok_name].forms[DefaultNames.BASE_FORM].spawn_pool)
                 )
+
+    @staticmethod
+    def _extract_name_and_aspect(
+        full_pokemon_string: str, available_features: dict[str, Feature] = dict()
+    ) -> tuple[str, str]:
+        pok_parts: list[str] = full_pokemon_string.split(" ")
+        pok_name: str = pok_parts[0]
+
+        aspect: str = ""
+        if len(pok_parts) > 1:  # try to find an aspect
+            feat_parts: list[str] = pok_parts[1].split("=")
+
+            if len(feat_parts) > 1:  # choice
+                feat_name: str = feat_parts[0]
+                feat_choice: str = feat_parts[1]
+
+                if feat_choice.lower() in [
+                    "true",
+                    "false",
+                ]:  # fix for some dumb stuff
+                    if feat_choice.lower() == "true":
+                        aspect = feat_parts[0]
+                elif feat_name.lower() == "form":  # fix other dumb stuff
+                    aspect = feat_choice.lower()
+                else:
+                    selected = ""
+                    if feat_name in available_features:
+                        selected = available_features[feat_name].source["aspectFormat"]
+                    else:
+                        for val in available_features.values():
+                            if feat_name in val.keys:
+                                selected = val.source["aspectFormat"]
+                                break
+                    if selected:
+                        aspect = selected.replace("{{choice}}", feat_choice)
+            else:
+                aspect = feat_parts[0]
+        if not aspect:
+            feat_parts = pok_name.split("_")
+            if len(feat_parts) > 1:
+                aspect = (
+                    "_".join(feat_parts[1:]) if len(feat_parts) > 2 else feat_parts[1]
+                )
+                pok_name = feat_parts[0]
+        return pok_name, aspect
+
+    @staticmethod
+    def _match_aspect_to_form(aspect: str, pokemon: Pokemon) -> list[PokemonForm]:
+        outp: list[PokemonForm] = list()
+
+        for name, form in pokemon.forms.items():
+            if (aspect in form.aspects) or (aspect.lower() == name.lower()):
+                outp.append(form)
+        return outp
 
     # ------------------------------------------------------------
 
@@ -774,9 +871,7 @@ class Pack:
             self.pokemon[pok_name] = Pokemon(
                 internal_name=pok_name,
                 dex_id=-1,
-                forms={
-                    DefaultNames.BASE_FORM: PokemonForm(name=DefaultNames.BASE_FORM)
-                },
+                forms={DefaultNames.BASE_FORM: PokemonForm(name=DefaultNames.BASE_FORM)},
             )
 
         order = data.get("order", -1)
@@ -884,9 +979,7 @@ class Pack:
     # ------------------------------------------------------------
 
     @safe_parse_per_file(component_attr="animations", DEBUG=DEBUG)
-    def _get_looks_animations(
-        self, input_file_path: Path, data: dict
-    ) -> None:  # STEP 3
+    def _get_looks_animations(self, input_file_path: Path, data: dict) -> None:  # STEP 3
         anims = data.get("animations", dict())
         if not isinstance(anims, dict):
             return
@@ -1034,15 +1127,35 @@ class Pack:
 
     def _assign_sound_files(self) -> None:
         for pokemon_sound in self.sounds:
-            if pokemon_sound.internal_name not in self.pokemon:
-                self.pokemon[pokemon_sound.internal_name] = Pokemon(
-                    internal_name=pokemon_sound.internal_name,
+            name, aspect = self._extract_name_and_aspect(
+                pokemon_sound.internal_name, available_features=self.features
+            )
+
+            if name not in self.pokemon:
+                self.pokemon[name] = Pokemon(
+                    internal_name=name,
                     dex_id=-1,
                     forms={
                         DefaultNames.BASE_FORM: PokemonForm(name=DefaultNames.BASE_FORM)
                     },
                 )
-            self.pokemon[pokemon_sound.internal_name].sound_entry = pokemon_sound
+
+            if aspect:  # if you found an aspect, match it or create
+                if relevant_forms := self._match_aspect_to_form(
+                    aspect=aspect, pokemon=self.pokemon[name]
+                ):
+                    for form in relevant_forms:
+                        form.sound_entry = pokemon_sound
+
+                else:
+                    # new_form = PokemonForm(name=f"--{aspect}")
+                    new_form = PokemonForm(name=f"--{aspect}", aspects=[aspect])
+                    new_form.sound_entry = pokemon_sound
+                    self.pokemon[name].forms[new_form.name] = new_form
+            else:
+                self.pokemon[name].forms[
+                    DefaultNames.BASE_FORM
+                ].sound_entry = pokemon_sound
 
     # ------------------------------------------------------------
 
@@ -1082,9 +1195,11 @@ class Pack:
                     if x is not None:
                         flag = True
                         e_path = x.file_path
-                        if e_path not in _edited_files:
+                        if (e_path not in _edited_files) and e_path.exists():
                             data = json.loads(e_path.read_text())
                             data["implemented"] = True
+                            if pok.is_pseudoform and gcr_settings.EXCLUDE_PSEUDOFORMS:
+                                data["implemented"] = False
                             e_path.write_text(json.dumps(data, indent=8))
                             _edited_files.add(e_path)
             if not flag:

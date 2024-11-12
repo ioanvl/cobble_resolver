@@ -3,32 +3,25 @@ import shutil
 from pathlib import Path
 from tkinter import filedialog
 from typing import Any, Iterable, Literal
-from utils.get_resource import get_resource_path
-from constants.text_constants import DefaultNames, HelperText
-from utils.cli_utils.generic import line_header
-from utils.cli_utils.keypress import clear_line, positive_int_choice
 
-from classes.base_classes import (
-    LangResultEntry,
-)
+from classes.base_classes import LangResultEntry, PackHolder
+from classes.merge_data import Merger
 from classes.pack import Pack
 from classes.pokemon import Pokemon
 from classes.pokemon_form import PokemonForm
+from constants.runtime_const import gcr_settings, settings_menu
+from constants.text_constants import DefaultNames, HelperText
+from utils.cli_utils.generic import display_help_menu, line_header, pack_name_choice
+from utils.cli_utils.keypress import clear, clear_line, keypress, positive_int_choice
+from utils.cli_utils.reorder_list import reorder_menu
+from utils.get_resource import get_resource_path
+from utils.text_utils import bcolors, c_text
 
 from .choice_rules import DualChoise_Risky, DualChoise_Simple
 
 
 class Combiner:
     def __init__(self, dir_name: Path | None = None):
-        if (not dir_name) or (not dir_name.exists()):
-            self.dir_name = Path(filedialog.askdirectory())
-            if self.dir_name == Path("."):
-                exit()
-        else:
-            self.dir_name = dir_name
-
-        self.output_pack_path = self.dir_name / "output" / "CORE_Pack"
-
         self.extraction_path: str = ""
 
         self.pack_paths: set[Path] = set()
@@ -36,10 +29,30 @@ class Combiner:
 
         self.defined_pokemon: set[str] = set()
 
+        # -----------------------
+
+        if (not dir_name) or (not dir_name.exists()):
+            if gcr_settings.AUTO_START:
+                dir_name = self._get_working_dir()
+                if dir_name is None:
+                    exit()
+                else:
+                    self.dir_name = dir_name
+            else:
+                self._menu()
+        else:
+            self.dir_name = dir_name
+
+        self.output_pack_path = self.dir_name / "output" / "CORE_Pack"
+
+        # -----------------------
+
         self._process_mods = False
         self._allow_risky_rules = True
 
         self.__helper_message_displayed = False
+
+        self._load_order: list = list()
 
     def run(self) -> None:
         self._prep_output_path()
@@ -59,11 +72,12 @@ class Combiner:
             exit()
 
     def export(self) -> None:
-        line_header("EXPORTING")
+        line_header("Exporting")
         for pack in self.packs:
             if pack.is_base or (pack.is_mod and (not self._process_mods)):
                 continue
-            pack._dirty_pokedex_fix()
+            if gcr_settings.POKEDEX_FIX:
+                pack._dirty_pokedex_fix()
             pack.export(
                 export_path=self.output_pack_path,
                 move_leftovers=self.output_pack_path.parent,
@@ -83,7 +97,12 @@ class Combiner:
 
     def _get_icon(self) -> None:
         try:
-            icon_path = Path(get_resource_path("src/images/cob_pack.png"))
+            _icon = (
+                DefaultNames.ALT_ICON
+                if gcr_settings.ALTERNATE_ICON
+                else DefaultNames.ICON_NAME
+            )
+            icon_path = Path(get_resource_path(f"src/images/{_icon}.png"))
             shutil.copy(
                 icon_path,
                 (self.output_pack_path / "pack.png"),
@@ -93,14 +112,85 @@ class Combiner:
 
     def _export_langs(self, folder_path: Path) -> None:
         res_d: dict[str, LangResultEntry] = dict()
-        for p in self.packs:
+        _accounted_merge_picks: set[str] = set()
+        for p in self.packs[::-1]:
+            if p.is_base or (p.is_mod and (not gcr_settings.PROCESS_MODS)):
+                continue
             l_es: list[LangResultEntry] = p._get_lang_export()
 
             for entry in l_es:
-                if entry.name in res_d:
-                    res_d[entry.name].data.update(entry.data)
-                else:
-                    res_d[entry.name] = entry
+                if entry.name not in res_d:
+                    res_d[entry.name] = LangResultEntry(name=entry.name, data=dict())
+
+                for l_key, l_entry in entry.data.items():
+                    if l_key.startswith("cobblemon.species."):
+                        _name_attempts: set[str] = set()
+                        l_name = l_key.split(".")[2]
+                        if l_name not in p.pokemon:
+                            _name_attempts.add(l_name)
+                            l_name = "".join(l_name.split("_"))
+                        if l_name not in p.pokemon:
+                            _name_attempts.add(l_name)
+                            l_name, aspect = p._extract_name_and_aspect(
+                                full_pokemon_string=l_key.split(".")[2],
+                                available_features=p.features,
+                            )
+                        if l_name not in p.pokemon:
+                            _name_attempts.add(l_name)
+                            l_name = "".join(l_name.split("_"))
+
+                        if l_name not in p.pokemon:
+                            _selected_att = None
+                            _name_attempts.add(l_name)
+                            for _attempt_pok in p.pokemon.values():
+                                if _attempt_pok.internal_name in _name_attempts:
+                                    _selected_att = _attempt_pok
+                                    break
+                                for _att_form in _attempt_pok.forms.values():
+                                    if _att_form.species is not None:
+                                        if (
+                                            _att_form.species.source.get(
+                                                "name", ""
+                                            ).lower()
+                                        ) in _name_attempts:
+                                            _selected_att = _attempt_pok
+                                            break
+                                    if _att_form.species_additions is not None:
+                                        _name_parts = (
+                                            _att_form.species_additions.source.get(
+                                                "target", "_:_"
+                                            ).lower()
+                                        ).split(":")
+                                        if len(_name_parts) > 1:
+                                            __att_name = _name_parts[1]
+                                        else:
+                                            __att_name = _name_parts[0]
+                                        if __att_name in _name_attempts:
+                                            _selected_att = _attempt_pok
+                                            break
+                                if _selected_att is not None:
+                                    break
+                            if _selected_att is None:
+                                if gcr_settings.SHOW_WARNINGS:
+                                    print(
+                                        c_text(
+                                            f"--! Found unmatched language entry: {l_key}",
+                                            color=bcolors.WARNING,
+                                        )
+                                    )
+                                if f"{entry.name}_{l_key}" not in _accounted_merge_picks:
+                                    res_d[entry.name].data[l_key] = l_entry
+                        else:
+                            if p.pokemon[l_name].merged:
+                                if p.pokemon[l_name].merge_pick:
+                                    res_d[entry.name].data[l_key] = l_entry
+                                    _accounted_merge_picks.add(f"{entry.name}_{l_key}")
+                            else:
+                                if f"{entry.name}_{l_key}" not in _accounted_merge_picks:
+                                    res_d[entry.name].data[l_key] = l_entry
+
+                    else:
+                        res_d[entry.name].data[l_key] = l_entry
 
         export_path = folder_path / "assets" / "cobblemon" / "lang"
         export_path.mkdir(parents=True, exist_ok=True)
@@ -109,8 +199,22 @@ class Combiner:
 
     def _export_sound_json(self, folder_path: Path):
         res = dict()
-        for p in self.packs:
-            res.update(p._get_sound_export())
+        _accounted_merge_picks: set[str] = set()
+        for p in self.packs[::-1]:
+            if p.is_base or (p.is_mod and (not gcr_settings.PROCESS_MODS)):
+                continue
+            for s_pok in p.pokemon.values():
+                if s_pok.selected:
+                    res.update(s_pok.get_sound_export())
+                if s_pok.merged:
+                    pok_sounds = s_pok.get_sound_export()
+                    if s_pok.merge_pick:
+                        res.update(pok_sounds)
+                        _accounted_merge_picks.update(list(pok_sounds.keys()))
+                    else:
+                        for s_key, s_entry in pok_sounds.items():
+                            if s_key not in _accounted_merge_picks:
+                                res[s_key] = s_entry
 
         (folder_path / "assets" / "cobblemon" / "sounds.json").write_text(
             json.dumps(res, indent=4)
@@ -126,7 +230,7 @@ class Combiner:
             if (p.name == "BASE") or (p.is_mod and (not self._process_mods)):
                 continue
             for pok in p.pokemon:
-                if p.pokemon[pok].selected:
+                if (p.pokemon[pok].selected) or p.pokemon[pok].merged:
                     if pok not in res:
                         res[pok] = set()
                     res[pok].add(p.name)
@@ -146,14 +250,29 @@ class Combiner:
         )
 
     def _get_pack_mcmeta(self) -> dict[str, dict[str, Any]]:
-        return {"pack": {"pack_format": 15, "description": "CORE Test"}}
+        return {"pack": {"pack_format": 15, "description": self._get_description()}}
+
+    def _get_description(self):
+        return "Combined pack created with CobblemonResolver"
 
     def _write_pack_mcmeta(self, folder_path: Path) -> None:
         mc = self._get_pack_mcmeta()
         (folder_path / "pack.mcmeta").write_text(json.dumps(mc))
 
     def _compress_pack(self, folder_path: Path) -> None:
-        shutil.make_archive(str(folder_path), format="zip", root_dir=str(folder_path))
+        for _ in range(3):
+            try:
+                shutil.make_archive(
+                    str(folder_path.parent / DefaultNames.FINAL_PACK_NAME),
+                    format="zip",
+                    root_dir=str(folder_path),
+                )
+                break
+            except Exception:
+                _ = input(
+                    "Packaging failed.. If you have the pack open, \
+    from a previous attempt please close it and retry.. Press [Enter] to retry"
+                )
 
     # ------------------------------------------------------------
 
@@ -174,7 +293,7 @@ class Combiner:
     # ------------------------------------------------------------
 
     def _prepare(self) -> None:
-        line_header("PREPARING")
+        line_header("Preparing")
         self.extraction_path = self.dir_name / ".temp"
         self.extraction_path.mkdir(parents=True, exist_ok=True)
         for p in self.packs:
@@ -192,6 +311,97 @@ class Combiner:
         if len(["_" for p in self.packs if p.is_base]) > 1:
             raise RuntimeError("Multiple [BASE] type packs present.")
 
+        # get load order if exists
+        _lo_path = self.dir_name / "_load_order.json"
+        if _lo_path.exists():
+            try:
+                self._load_order = json.loads(_lo_path.read_text())
+            except Exception:
+                pass
+
+        self._menu()
+
+        self._reorder_packs()
+
+    def _menu(self):
+        _prep_flag = bool(self.packs)
+        while True:
+            clear()
+            line_header("CobbleResolver")
+
+            if _prep_flag:
+                print("[S]tart\n")
+                print("[L]oad Order")
+            else:
+                print("[S]elect working folder\n")
+
+            print("[O]ptions\n")
+            print("[H]elp\n")
+            print(f"[{'ESC/' if not _prep_flag else ''}E]xit\n")
+
+            _inp = keypress("Enter option:..").lower()
+
+            if _inp == "e" or ((_inp == "esc") and (not _prep_flag)):
+                exit()
+            elif _inp == "s":
+                if _prep_flag:
+                    return
+                else:
+                    if (x := self._get_working_dir()) is not None:
+                        self.dir_name = x
+                        clear()
+                        return
+            elif _inp == "l" and _prep_flag:
+                self._edit_load_order()
+            elif _inp == "o":
+                settings_menu(gcr_settings)
+            elif _inp == "h":
+                display_help_menu()
+
+    def _get_working_dir(self) -> None | Path:
+        dir_name = Path(filedialog.askdirectory())
+        if dir_name == Path("."):
+            return None
+        else:
+            return dir_name
+
+    def _edit_load_order(self) -> None:
+        _load_order = self._load_order or [_pack.name for _pack in self.packs]
+        _load_order = [
+            _l for _l in _load_order if _l in [_pack.name for _pack in self.packs]
+        ]
+        for _p in self.packs:
+            if _p.name not in _load_order:
+                _load_order.append(_p.name)
+
+        if (new_order := reorder_menu(_load_order)) is not None:
+            self._load_order = new_order
+
+        if self._load_order:
+            _lo_path = self.dir_name / "_load_order.json"
+            _lo_path.write_text(json.dumps(self._load_order, indent=3))
+
+    def _reorder_packs(self) -> None:
+        if self._load_order is None:
+            return
+        _new_order_list = list()
+        for _name in self._load_order:
+            _temp = [pack for pack in self.packs if pack.name == _name]
+            if not _temp:
+                # maybe old load order?
+                if gcr_settings.SHOW_WARNINGS:
+                    print(c_text(f"--! Invalid entry in load order: {_name}"))
+                continue
+            for i in _temp:
+                _new_order_list.append(i)
+        _unordered = [pack for pack in self.packs if pack not in _new_order_list]
+        for i in _unordered:
+            _new_order_list.append(i)
+        if len(_new_order_list) != len(self.packs):
+            raise RuntimeError
+
+        self.packs = _new_order_list
+
     def _remove_empty_packs(self) -> None:
         for p in self.packs:
             if not bool(p.component_location):
@@ -200,7 +410,7 @@ class Combiner:
     # ------------------------------------------------------------
 
     def _process(self) -> None:
-        line_header("PROCESSING")
+        line_header("Processing")
 
         for p in self.packs:
             p._process()
@@ -208,10 +418,13 @@ class Combiner:
         for p in self.packs:
             self.defined_pokemon.update(list(p.pokemon.keys()))
 
-        line_header("RESOLVING")
+        line_header("Resolving")
 
-        # self._resolution_core()
-        self._resolution_greedy()
+        if gcr_settings.OP_MODE.value:
+            self._merge_v_a()
+        else:
+            # self._resolution_core()
+            self._resolution_greedy()
 
     def _sort_pokemon_str(self, inp: Iterable[str]):
         return sorted(
@@ -250,6 +463,10 @@ class Combiner:
             ),
         )
 
+    def _merge_v_a(self):
+        merger = Merger(attached_combiner=self)
+        merger.process()
+
     def _resolution_greedy(self) -> None:
         _to_check: set[str] = self.defined_pokemon.copy()
         _checked: set[str] = set()
@@ -258,11 +475,15 @@ class Combiner:
 
         for p_name in _to_check:
             if sum([1 for p in self.packs if (p_name in p.pokemon)]) == 1:
-                holder, num, name = self._make_pack_holder(p_name)
-                pack, sel_type = self._single_simple_add(holder=holder)
-                holder[pack].select()
+                ph: PackHolder = self._make_pack_holder(pokemon_name=p_name)
+
+                pack, sel_type = self._single_simple_add(holder=ph.mons)
+                ph.mons[pack].select()
                 self._print_pack_choise(
-                    number=num, name=name, selected_pack=pack, selection_type=sel_type
+                    number=ph.dex_num,
+                    name=ph.name,
+                    selected_pack=pack,
+                    selection_type=sel_type,
                 )
                 _checked.add(p_name)
         for i in _checked:
@@ -281,21 +502,21 @@ class Combiner:
             for p_name in _to_check:
                 if sum([1 for p in self.packs if (p_name in p.pokemon)]) == 2:
                     _num_flag = True
-                    holder, num, name = self._make_pack_holder(p_name)
+                    ph: PackHolder = self._make_pack_holder(pokemon_name=p_name)
 
                     flag = False
                     selected_key: str = ""
                     selection_type: str = ""
                     for check in _avail_checks:
                         if not flag:
-                            selected_key, selection_type = check(holder=holder)
+                            selected_key, selection_type = check(holder=ph.mons)
                             flag: bool = selected_key is not None
                     if flag:
                         _checked.add(p_name)
-                        holder[selected_key].select()
+                        ph.mons[selected_key].select()
                         self._print_pack_choise(
-                            number=num,
-                            name=name,
+                            number=ph.dex_num,
+                            name=ph.name,
                             selected_pack=selected_key,
                             selection_type=selection_type,
                         )
@@ -309,9 +530,9 @@ class Combiner:
                 if (
                     sum([1 for p in self.packs if (p_name in p.pokemon)]) == 2
                 ):  # TODO fuckin optimize this, for the love of god
-                    holder, num, name = self._make_pack_holder(p_name)
-
-                    self._choose_pack(holder=holder, number=num, name=name)
+                    self._choose_pack(
+                        pack_holder=self._make_pack_holder(pokemon_name=p_name)
+                    )
                     _to_check.remove(
                         p_name
                     )  # TODO IS this dangerous? editing but also breaking
@@ -324,12 +545,9 @@ class Combiner:
         _to_check = self._sort_pokemon_str(inp=_to_check)
 
         for p_name in _to_check:
-            holder, num, name = self._make_pack_holder(p_name)
-            self._choose_pack(holder=holder, number=num, name=name)
+            self._choose_pack(pack_holder=self._make_pack_holder(pokemon_name=p_name))
 
-    def _make_pack_holder(
-        self, pokemon_name: str
-    ) -> tuple[dict[str, Pokemon], int, str]:
+    def _make_pack_holder(self, pokemon_name: str) -> PackHolder:
         holder: dict[str, Pokemon] = dict()
 
         d_num: int = 0
@@ -346,15 +564,17 @@ class Combiner:
                 list(holder.values())[0].name
                 or f"[{list(holder.values())[0].internal_name}]"
             )
-        return holder, d_num, d_name
+        return PackHolder(
+            mons=holder, dex_num=d_num, name=d_name, internal_name=pokemon_name
+        )
 
     def _resolution_core(self) -> None:
-        line_header("RESOLVING")
+        line_header("Resolving")
         for pok_name in self.defined_pokemon:
             self._resolution_pokemon(pokemon_name=pok_name)
 
     def _resolution_pokemon(self, pokemon_name: str) -> None:
-        temp_holder, d_num, d_name = self._make_pack_holder(pokemon_name=pokemon_name)
+        ph: PackHolder = self._make_pack_holder(pokemon_name=pokemon_name)
 
         flag = False
         selected_key: str = ""
@@ -363,18 +583,18 @@ class Combiner:
         checks = [self._single_simple_add, self._dual_choice]
         for check in checks:
             if not flag:
-                selected_key, selection_type = check(holder=temp_holder)
+                selected_key, selection_type = check(holder=ph.mons)
                 flag = selected_key is not None
 
         if flag:
             self._print_pack_choise(
-                number=d_num,
-                name=d_name,
+                number=ph.dex_num,
+                name=ph.name,
                 selected_pack=selected_key,
                 selection_type=selection_type,
             )
         else:
-            self._choose_pack(holder=temp_holder, number=d_num, name=d_name)
+            self._choose_pack(pack_holder=ph)
 
     def _single_simple_add(
         self, holder: dict[str, Pokemon]
@@ -504,53 +724,61 @@ class Combiner:
         return (None, None)
 
     def _print_pack_choise(
-        self, number: int, name: str, selected_pack: str, selection_type: str = "M"
+        self,
+        number: int,
+        name: str,
+        selected_pack: str | None,
+        selection_type: str = "M",
     ) -> None:
-        x = [p for p in self.packs if p.name == selected_pack][0]
-        if (x.is_base and (selection_type in ["A"])) or (
-            (x.is_mod and (not x.is_base)) and (not self._process_mods)
-        ):
-            return
+        if selected_pack is not None:
+            x = [p for p in self.packs if p.name == selected_pack][0]
+            if (x.is_base and (selection_type in ["A"])) or (
+                (x.is_mod and (not x.is_base)) and (not self._process_mods)
+            ):
+                return
 
         print(f"-- AUTO [{selection_type}] -- \n#{number} - {name}  [{selected_pack}]")
 
         print("=" * 25)
 
-    def _choose_pack(self, holder: dict[str, Pokemon], number: int, name: str):
-        if not self.__helper_message_displayed:
+    def _choose_pack(self, pack_holder: PackHolder):
+        if not self.__helper_message_displayed and (
+            gcr_settings.SHOW_HELPER_TEXT and not gcr_settings.AUTO_LOAD_ORDER_MODE
+        ):
             print(HelperText.AUTO_MANUAL_CHOISE)
             _ = input("Press [Enter] to continue..")
             print(clear_line, end="")
             self.__helper_message_displayed = True
 
-        print(f"#{number} - {name}")
+        mons: dict[str, Pokemon] = pack_holder.mons
+        keys = list(mons.keys())
 
-        keys = list(holder.keys())
+        if gcr_settings.AUTO_LOAD_ORDER_MODE:
+            print(str(pack_holder), end="")
+            while True:
+                k_in = positive_int_choice(
+                    max_ch=(len(keys) + 1),
+                    text="Pack choice:   [Num.#] Pack",
+                )
+                if k_in:
+                    break
+                else:
+                    print(f"\033[A\r{' '*40}\r", end="")
 
-        for i, k in enumerate(keys):
-            pack_name = k
-            p = holder[pack_name]
-            outp = repr(p)
-            out_parts = outp.split("\n")
-            out_parts[0] = f"{i+1}. {pack_name}"
-            outp = "\n".join(out_parts)
-            print(outp)
+            selected_key = keys[k_in - 1]
+            print(clear_line, end="")
+            print("=" * 25)
+        else:
+            selected_key = keys[0]
 
-        while True:
-            k_in = positive_int_choice(
-                max_ch=(len(keys) + 1),
-                text="Pack choice:   [Num.#] Pack",
-            )
-            if k_in:
-                break
-            else:
-                print(f"\033[A\r{' '*40}\r", end="")
-
-        selected_key = keys[k_in - 1]
-        holder[selected_key].select()
-        print(f"\033[A\r{' '*40}\r", end="")
-        print(f"- {k_in}. [{selected_key}]")
-        print("=" * 25)
+        mons[selected_key].select()
+        pack_name_choice(selected_key)
+        self._print_pack_choise(
+            number=pack_holder.dex_num,
+            name=pack_holder.name,
+            selected_pack=selected_key,
+            selection_type=c_text(text="=AUTO LOAD ORDER=", color=bcolors.WARNING),
+        )
 
     def _is_selected(self, pokemon_name: str) -> bool:
         return bool(

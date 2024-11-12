@@ -4,10 +4,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, LiteralString, Optional
 
-from constants.text_constants import TextSymbols, DefaultNames
-from utils.cli_utils.generic import bool_square
-
 from classes.base_classes import bcfo
+from classes.merge_data import MergeStatus, merge_color_assignment, MergeST
+from classes.sounds import SoundEntry
+from constants.text_constants import DefaultNames, TextSymbols
+from utils.cli_utils.generic import bool_square
+from utils.text_utils import c_text
 
 if TYPE_CHECKING:
     from classes.pack import Pack
@@ -27,47 +29,124 @@ class PokemonForm:
 
     spawn_pool: list[Path] = field(default_factory=list)
 
+    sound_entry: SoundEntry | None = None
+
     parent_pokemon: Optional["Pokemon"] = None
     parent_pack: Optional["Pack"] = None
 
-    def __repr__(self) -> str:
+    merge_status: Optional[MergeStatus] = field(default_factory=MergeStatus)
+
+    def is_fully_data_merged(self) -> bool:
+        if self.merge_status is not None:
+            return (
+                ((self.species is None) or (self.merge_status.species == MergeST.FULL))
+                and (
+                    (self.species_additions is None)
+                    or (self.merge_status.species_additions == MergeST.FULL)
+                )
+                and (
+                    bool(len(self.spawn_pool))
+                    or (self.merge_status.spawn_pool == MergeST.FULL)
+                )
+            )
+        return (
+            (self.species is None)
+            and (self.species_additions is None)
+            and (not self.spawn_pool)
+        )
+
+    def is_partially_data_merged(self) -> bool:
+        if self.merge_status is not None:
+            return (
+                ((self.species is None) or (self.merge_status.species != MergeST.NO))
+                or (
+                    (self.species_additions is None)
+                    or (self.merge_status.species_additions != MergeST.NO)
+                )
+                or (
+                    bool(len(self.spawn_pool))
+                    or (self.merge_status.spawn_pool != MergeST.NO)
+                )
+            )
+        return (
+            (self.species is None)
+            and (self.species_additions is None)
+            and (not self.spawn_pool)
+        )
+
+    def _display(self, color: bool = True, merge_mode: bool = False):
         s: str = self._st()
         ret: str = ""
         if self.name != DefaultNames.BASE_FORM:
             ret += f"{s} {self.name if self.name else self.aspects}\n"
         ret += f"{s} "
-        ret += f"DATA: Spawn:{bool_square(len(self.spawn_pool))} | "
-        ret += f"S:{self.__square_atr(self.species)}"
-        ret += f"/{self.__square_atr(self.species_additions)}:SA "
+        ret += "DATA: "
+        ret += c_text(
+            f"Spawn:{bool_square(self.spawn_pool)} ",
+            color=(
+                merge_color_assignment[
+                    getattr(self.merge_status, "spawn_pool").value
+                    if self.merge_status
+                    else 0
+                ]
+                if color
+                else None
+            ),
+        )
+        ret += "| "
+        ret += c_text(
+            f"S:{bool_square(self.species)}",
+            color=(
+                merge_color_assignment[
+                    getattr(self.merge_status, "species").value
+                    if self.merge_status
+                    else 0
+                ]
+                if color
+                else None
+            ),
+        )
+        ret += "/"
+        ret += c_text(
+            f"{bool_square(self.species_additions)}:SA ",
+            color=(
+                merge_color_assignment[
+                    getattr(self.merge_status, "species_additions").value
+                    if self.merge_status
+                    else 0
+                ]
+                if color
+                else None
+            ),
+        )
+        if self.sound_entry:
+            ret += f"| {TextSymbols.music_symbol}:{bool_square(self.sound_entry)} "
 
-        if self.name == DefaultNames.BASE_FORM and (self.parent_pokemon is not None):
-            ret += (
-                f"| {TextSymbols.music_symbol}:{bool_square(self.parent_pack.sounds)} "
-            )
-            if self.parent_pokemon.sa_transfers_received:
-                ret += " +SA"
+        if not merge_mode:
+            if self.name == DefaultNames.BASE_FORM and (self.parent_pokemon is not None):
+                if self.parent_pokemon.sa_transfers_received:
+                    ret += " +SA"
 
-            if self.parent_pokemon.requested:
-                ret += " +Req"
-                if req_diff := (
-                    self.parent_pokemon.requested
-                    - self.parent_pokemon.request_transfered
-                ):
-                    ret += f"[{req_diff}]"
-                    if self.parent_pokemon._is_actively_requested():
-                        ret += TextSymbols.left_arrow
-                    # else:
-                    #     if self.parent_pack and self.parent_pack.parent_combiner:
-                    #         if self.parent_pack.parent_combiner._is_selected(
-                    #             pokemon_name=self.parent_pokemon.internal_name
-                    #         ):
-                    #             ret += TextSymbols.x_symbol
+                if self.parent_pokemon.requested:
+                    ret += " +Req"
+                    if req_diff := (
+                        self.parent_pokemon.requested
+                        - self.parent_pokemon.request_transfered
+                    ):
+                        ret += f"[{req_diff}]"
+                        if self.parent_pokemon._is_actively_requested():
+                            ret += TextSymbols.left_arrow
+                    else:
+                        ret += f"[{TextSymbols.check_mark}]"
 
-                else:
-                    ret += f"[{TextSymbols.check_mark}]"
+        for res_ind in self.resolver_assignments:
+            ret += f"\n{s} {repr(self.parent_pokemon.resolvers[res_ind])}"
 
         ret += f"\n{s} {'-' * 10}"
         return ret
+
+    def __repr__(self) -> str:
+        return self._display(color=False)
 
     @property
     def comp_stamp(self) -> list[bool]:
@@ -96,6 +175,8 @@ class PokemonForm:
         if self.parent_pokemon:
             for i in self.resolver_assignments:
                 res.update(self.parent_pokemon.resolvers[i].get_all_paths())
+        if self.sound_entry is not None:
+            res.update(self.sound_entry.get_all_files())
         return list(res)
 
     def is_complete(self) -> bool:
@@ -152,11 +233,19 @@ class PokemonForm:
             return bool(
                 self.parent_pokemon.requested
                 and (
-                    self.parent_pokemon.requested
-                    - self.parent_pokemon.request_transfered
+                    self.parent_pokemon.requested - self.parent_pokemon.request_transfered
                 )
             )
         return False
+
+    def is_relevant_form(self, name: str) -> bool:
+        return (self.name == name) or (name in self.aspects)
+
+    def get_species_paths_key(self) -> tuple[Path | None, Path | None]:
+        return (
+            getattr(getattr(self, "species", None), "file_path", None),
+            getattr(getattr(self, "species_additions", None), "file_path", None),
+        )
 
     def _st(self) -> LiteralString:
         return f"{' '*(3 if (self.name != 'base_form') else 0)}|"
