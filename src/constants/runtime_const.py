@@ -43,7 +43,7 @@ class CRSettings:
     SHOW_WARNINGS: bool = True
     SHOW_HELPER_TEXT: bool = True
 
-    AUTO_START: bool = False
+    AUTO_START: bool = True
     AUTO_LOAD_ORDER_MODE: bool = False
 
     SHOW_ADVANCED_SETTINGS: SettingsMetaType = SettingsMetaType.OFF
@@ -62,6 +62,7 @@ SETTINGS_META = {
     "SPECIES_STRICT_KEY_MATCH": SettingMeta(hidden=True),
     "AUTO_START": SettingMeta(hidden=True),
     # Spacers
+    "AUTO_LOAD_ORDER_MODE": SettingMeta(after_spacer=True),
     "POKEDEX_FIX": SettingMeta(after_spacer=True),
     "PROCESS_MODS": SettingMeta(after_spacer=True, hidden=True),
     "COMBINE_POKEMON_MOVES": SettingMeta(after_spacer=True),
@@ -74,6 +75,7 @@ SETTINGS_META_ADV = {
     "SPECIES_STRICT_KEY_MATCH": SettingMeta(hidden=True),
     "AUTO_START": SettingMeta(hidden=True),
     # Spacers
+    "AUTO_LOAD_ORDER_MODE": SettingMeta(after_spacer=True),
     "POKEDEX_FIX": SettingMeta(after_spacer=True),
     "PROCESS_MODS": SettingMeta(after_spacer=True),
     "COMBINE_POKEMON_MOVES": SettingMeta(after_spacer=True),

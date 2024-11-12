@@ -202,4 +202,4 @@ class PackHolder:
             return bcolors.ENDC
 
     def __str__(self) -> str:
-        return self.display(color=True, only_graphics=False)
+        return self.display(color=False, only_graphics=False)

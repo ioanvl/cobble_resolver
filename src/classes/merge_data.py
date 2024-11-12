@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy
 import json
-import random
 import shutil
 from dataclasses import dataclass, field
 from enum import Enum
@@ -360,7 +359,7 @@ class Merger:
         _ind = 0
         _max_ind = 0
 
-        if gcr_settings.SHOW_HELPER_TEXT:
+        if gcr_settings.SHOW_HELPER_TEXT and not gcr_settings.AUTO_LOAD_ORDER_MODE:
             print(HelperText.AUTO_MANUAL_CHOISE)
             _ = input("Press [Enter] to continue..")
             print(clear_line, end="")
@@ -374,7 +373,7 @@ class Merger:
                 color=True, only_graphics=True, exclude_merged=True, show_merged=True
             )
             print(disp, end="\n\n")
-            if True:  # for debugging purposes
+            if not gcr_settings.AUTO_LOAD_ORDER_MODE:  # for debugging purposes
                 _err = None
                 while True:
                     print(clear_line, end="")
@@ -403,14 +402,11 @@ class Merger:
                 if inp != "up":
                     pick = keys[inp - 1]
             else:
-                pick = keys[random.randrange(0, len(keys))]
+                pick = keys[0]
+                inp = ""
 
             if inp != "up":
                 pack_name_choice(pick)
-                # print(c_text(f"={'-'*15}", color=bcolors.WARNING))
-                # print(f"Selected: [{pick}]")
-                # print(c_text(f"={'-'*15}", color=bcolors.WARNING))
-                # print("=" * 25)
 
                 merge_holder.pick = pick
 

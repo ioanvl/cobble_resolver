@@ -732,7 +732,9 @@ class Combiner:
         print("=" * 25)
 
     def _choose_pack(self, pack_holder: PackHolder):
-        if not self.__helper_message_displayed and gcr_settings.SHOW_HELPER_TEXT:
+        if not self.__helper_message_displayed and (
+            gcr_settings.SHOW_HELPER_TEXT and not gcr_settings.AUTO_LOAD_ORDER_MODE
+        ):
             print(HelperText.AUTO_MANUAL_CHOISE)
             _ = input("Press [Enter] to continue..")
             print(clear_line, end="")
@@ -741,36 +743,32 @@ class Combiner:
         mons: dict[str, Pokemon] = pack_holder.mons
         keys = list(mons.keys())
 
-        # print(f"#{pack_holder.dex_num} - {pack_holder.name}")
-        # for i, k in enumerate(keys):
-        #     pack_name = k
-        #     p = mons[pack_name]
-        #     outp = repr(p)
-        #     out_parts = outp.split("\n")
-        #     out_parts[0] = f"{i+1}. {pack_name}"
-        #     outp = "\n".join(out_parts)
-        #     print(outp)
+        if gcr_settings.AUTO_LOAD_ORDER_MODE:
+            print(str(pack_holder), end="")
+            while True:
+                k_in = positive_int_choice(
+                    max_ch=(len(keys) + 1),
+                    text="Pack choice:   [Num.#] Pack",
+                )
+                if k_in:
+                    break
+                else:
+                    print(f"\033[A\r{' '*40}\r", end="")
 
-        print(str(pack_holder), end="")
+            selected_key = keys[k_in - 1]
+            print(clear_line, end="")
+            print("=" * 25)
+        else:
+            selected_key = keys[0]
 
-        while True:
-            k_in = positive_int_choice(
-                max_ch=(len(keys) + 1),
-                text="Pack choice:   [Num.#] Pack",
-            )
-            if k_in:
-                break
-            else:
-                print(f"\033[A\r{' '*40}\r", end="")
-
-        selected_key = keys[k_in - 1]
         mons[selected_key].select()
-        print(clear_line, end="")
-
         pack_name_choice(selected_key)
-
-        # print(f"- {k_in}. [{selected_key}]")
-        print("=" * 25)
+        self._print_pack_choise(
+            number=pack_holder.dex_num,
+            name=pack_holder.name,
+            selected_pack=selected_key,
+            selection_type=c_text(text="=AUTO LOAD ORDER=", color=bcolors.WARNING),
+        )
 
     def _is_selected(self, pokemon_name: str) -> bool:
         return bool(
