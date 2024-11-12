@@ -1,4 +1,7 @@
-from constants.text_constants import TextSymbols
+from typing import Literal
+
+from constants.text_constants import HelperText, TextSymbols
+from utils.cli_utils.keypress import _keypress, clear, keypress
 from utils.text_utils import bcolors, c_text
 
 
@@ -17,14 +20,47 @@ def pack_name_choice(text: str = ""):
     print("=" * 25)
 
 
-def help_menu():
+_help_menu_index = {
+    "General Operation": HelperText.GENERIC_HELP,
+    "Output": HelperText.OUTPUT_HELP,
+    "Pack View": [HelperText.PACK_VIEW_HELP, HelperText.PACK_VIEW_HELP_2],
+    "Pack Choices": [HelperText.PACK_CHOICES, HelperText.PACK_CHOICES_2],
+    "Load Order": HelperText.LOAD_ORDER,
+    "Settings": HelperText.SETTINGS_HELP,
+}
+
+
+def display_help_menu():
     while True:
-        text = (
-            "1. General Operation"
-            "2. Output"
-            "3. Pack View"
-            "4. Pack Choices"
-            "5. Load Order"
-            "6. Settings"
+        clear()
+        print("\n".join([f"{i+1}. {v}" for i, v in enumerate(_help_menu_index.keys())]))
+
+        _inp = keypress("\nPress Num[#]: Display help option, [ESC/Enter]:Return ")
+
+        if _inp in ["enter", "esc"]:
+            clear()
+            return
+        try:
+            _inp = int(_inp)
+        except Exception:
+            continue
+        if _inp > 0 and _inp <= len(_help_menu_index.keys()):
+            displa_text_and_wait_for_enter(
+                _help_menu_index[list(_help_menu_index.keys())[_inp - 1]]
+            )
+
+
+def displa_text_and_wait_for_enter(text: str | list[str]) -> None:
+    if isinstance(text, str):
+        text = [text]
+    for _t in range(len(text)):
+        clear()
+        print(text[_t])
+        _label: Literal["retutn"] | Literal["continue"] = (
+            "retutn" if (_t == (len(text) - 1)) else "continue"
         )
-        raise NotImplementedError
+        print(f"\n\n{'-'*35}\nPress [ESC/Enter] to {_label}..")
+        while True:
+            _inp = _keypress()
+            if _inp in ["enter", "esc"]:
+                break

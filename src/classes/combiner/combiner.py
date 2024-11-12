@@ -11,7 +11,7 @@ from classes.pokemon import Pokemon
 from classes.pokemon_form import PokemonForm
 from constants.runtime_const import gcr_settings, settings_menu
 from constants.text_constants import DefaultNames, HelperText
-from utils.cli_utils.generic import line_header, pack_name_choice
+from utils.cli_utils.generic import display_help_menu, line_header, pack_name_choice
 from utils.cli_utils.keypress import clear, clear_line, keypress, positive_int_choice
 from utils.cli_utils.reorder_list import reorder_menu
 from utils.get_resource import get_resource_path
@@ -327,11 +327,11 @@ class Combiner:
 
             print("[O]ptions\n")
             print("[H]elp\n")
-            print("[E]xit\n")
+            print(f"[{'ESC/' if not _prep_flag else ''}E]xit\n")
 
             _inp = keypress("Enter option:..").lower()
 
-            if _inp == "e":
+            if _inp == "e" or ((_inp == "esc") and (not _prep_flag)):
                 exit()
             elif _inp == "s":
                 if _prep_flag:
@@ -346,7 +346,7 @@ class Combiner:
             elif _inp == "o":
                 settings_menu(gcr_settings)
             elif _inp == "h":
-                pass
+                display_help_menu()
 
     def _get_working_dir(self) -> None | Path:
         dir_name = Path(filedialog.askdirectory())
