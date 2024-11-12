@@ -22,7 +22,7 @@ from classes.pokemon import Pokemon
 from classes.pokemon_form import PokemonForm, ResolverEntry
 from classes.sounds import SoundPack
 from constants.generic import default_animation_types
-from constants.runtime_const import DEBUG, gcr_settings
+from constants.runtime_const import DEBUG, CrOpType, gcr_settings
 from constants.text_constants import DefaultNames, TextSymbols
 from utils.cli_utils.generic import bool_square
 from utils.cli_utils.keypress import clear_line
@@ -282,7 +282,9 @@ class Pack:
         if isinstance(move_leftovers, Path) and del_flag:
             mv_count = self._move_leftovers(export_path=move_leftovers)
 
-        outp = f"{c} Moved "
+        outp = ""
+        if gcr_settings.OP_MODE == CrOpType.CHOOSE:
+            outp += f"{c} Moved "
         if d := (len(path_set) - c):
             outp += f"- {d} Missed "
         if mv_count:

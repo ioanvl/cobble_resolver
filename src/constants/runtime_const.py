@@ -14,7 +14,7 @@ class SettingsMetaType(Enum):
 
 
 class CrOpType(Enum):
-    PICK = 0
+    CHOOSE = 0
     MERGE = 1
 
 
@@ -51,8 +51,8 @@ class CRSettings:
 
 SETTINGS_DEPENDENCIES = {
     "EXCLUDE_PSEUDOFORMS": lambda s: s.POKEDEX_FIX,
-    "KEEP_DUPLICATE_SAS_ON_MOVE": lambda s: s.OP_MODE == CrOpType.PICK,
-    "KEEP_DUPLICATE_SPAWNS_ON_MOVE": lambda s: s.OP_MODE == CrOpType.PICK,
+    "KEEP_DUPLICATE_SAS_ON_MOVE": lambda s: s.OP_MODE == CrOpType.CHOOSE,
+    "KEEP_DUPLICATE_SPAWNS_ON_MOVE": lambda s: s.OP_MODE == CrOpType.CHOOSE,
 }
 
 SETTINGS_META = {

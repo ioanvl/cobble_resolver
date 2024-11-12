@@ -106,7 +106,7 @@ class HelperText:
     )
 
     PACK_CHOICES = (
-        f"While going through the packs either in {CrOpType.PICK.name} "
+        f"While going through the packs either in {CrOpType.CHOOSE.name} "
         f" or {CrOpType.MERGE.name} mode, when there is a conflict you will "
         "see a view containing entries for every pack that adds this pokemon."
         f"\n\nIn those options there might be a "
@@ -156,7 +156,7 @@ class HelperText:
 
     SETTINGS_HELP = (
         "- Op Mode:"
-        f"\n     - {CrOpType.PICK.name}: Files are exclusivelly chosen from one pack, "
+        f"\n     - {CrOpType.CHOOSE.name}: Files are exclusivelly chosen from one pack, "
         "including spawns, data and graphics."
         f"\n     - {CrOpType.MERGE.name}: Files are merged from all packs included. "
         "Spawns, evolutions, moves (if enabled in settings) and other data "

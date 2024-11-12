@@ -111,7 +111,7 @@ class Pokemon:
         for form in self.forms.values():
             res.update(form.get_all_paths())
 
-        if gcr_settings.OP_MODE == CrOpType.PICK:
+        if gcr_settings.OP_MODE == CrOpType.CHOOSE:
             res.update(self.sa_transfers_received)
         res.update(self._get_relevant_feature_files())
         return list(res)
