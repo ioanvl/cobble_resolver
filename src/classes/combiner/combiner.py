@@ -132,9 +132,7 @@ class Combiner:
                                 for _att_form in _attempt_pok.forms.values():
                                     if _att_form.species is not None:
                                         if (
-                                            _att_form.species.source.get(
-                                                "name", ""
-                                            ).lower()
+                                            _att_form.species.source.get("name", "").lower()
                                         ) in _name_attempts:
                                             _selected_att = _attempt_pok
                                             break
@@ -242,9 +240,7 @@ class Combiner:
     def _compress_pack(self, folder_path: Path) -> None:
         for _ in range(3):
             try:
-                shutil.make_archive(
-                    str(folder_path), format="zip", root_dir=str(folder_path)
-                )
+                shutil.make_archive(str(folder_path), format="zip", root_dir=str(folder_path))
                 break
             except Exception:
                 _ = input(
@@ -417,9 +413,7 @@ class Combiner:
                 if (
                     sum([1 for p in self.packs if (p_name in p.pokemon)]) == 2
                 ):  # TODO fuckin optimize this, for the love of god
-                    self._choose_pack(
-                        pack_holder=self._make_pack_holder(pokemon_name=p_name)
-                    )
+                    self._choose_pack(pack_holder=self._make_pack_holder(pokemon_name=p_name))
                     _to_check.remove(
                         p_name
                     )  # TODO IS this dangerous? editing but also breaking
@@ -448,12 +442,9 @@ class Combiner:
                     d_name = holder[pack.name].name
         if not d_name:
             d_name = (
-                list(holder.values())[0].name
-                or f"[{list(holder.values())[0].internal_name}]"
+                list(holder.values())[0].name or f"[{list(holder.values())[0].internal_name}]"
             )
-        return PackHolder(
-            mons=holder, dex_num=d_num, name=d_name, internal_name=pokemon_name
-        )
+        return PackHolder(mons=holder, dex_num=d_num, name=d_name, internal_name=pokemon_name)
 
     def _resolution_core(self) -> None:
         line_header("RESOLVING")
@@ -492,9 +483,7 @@ class Combiner:
             return (selected_key, "A")
         return (None, None)
 
-    def _dual_choice(
-        self, holder: dict[str, Pokemon]
-    ) -> tuple[str, str] | tuple[None, None]:
+    def _dual_choice(self, holder: dict[str, Pokemon]) -> tuple[str, str] | tuple[None, None]:
         if len(holder) == 2:
             if "BASE" in holder:
                 pack, stype = self._dual_choice_against_base(holder=holder)
@@ -533,8 +522,7 @@ class Combiner:
         o_patch = holder[other_key].forms[DefaultNames.BASE_FORM].comp_stamp
 
         if ((not b_patch[0]) and o_patch[0]) and (
-            ((not b_patch[3]) and o_patch[3])
-            or ((not all(b_patch[4:])) and (all(o_patch[4:])))
+            ((not b_patch[3]) and o_patch[3]) or ((not all(b_patch[4:])) and (all(o_patch[4:])))
         ):
             holder[other_key].select()
             return (other_key, "R")
@@ -560,9 +548,7 @@ class Combiner:
         self, holder: dict[str, Pokemon]
     ) -> tuple[str, Literal["I"]] | tuple[None, None]:
         if (
-            all(
-                [(p.parent_pack.is_base or p.parent_pack.is_mod) for p in holder.values()]
-            )
+            all([(p.parent_pack.is_base or p.parent_pack.is_mod) for p in holder.values()])
         ) and (not self._process_mods):
             return (list(holder.keys())[0], "I")
         return (None, None)
@@ -570,16 +556,9 @@ class Combiner:
     def _dual_choice_mod_and_pack(
         self, holder: dict[str, Pokemon]
     ) -> tuple[str, str] | tuple[None, None]:
-        if (
-            sum(
-                [(p.parent_pack.is_base or p.parent_pack.is_mod) for p in holder.values()]
-            )
-            == 1
-        ):
+        if sum([(p.parent_pack.is_base or p.parent_pack.is_mod) for p in holder.values()]) == 1:
             fm: PokemonForm = [
-                p
-                for p in holder.values()
-                if (p.parent_pack.is_base or p.parent_pack.is_mod)
+                p for p in holder.values() if (p.parent_pack.is_base or p.parent_pack.is_mod)
             ][0].forms[DefaultNames.BASE_FORM]
             fo: PokemonForm = [
                 p

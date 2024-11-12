@@ -115,7 +115,9 @@ class Merger:
 
             extras: set[str] = set(merge_holder.original_holder.mons.keys())
             extras.difference(set([merge_holder.pick]))
-            extras.difference(set(merge_holder.original_holder._get_unprocessable_keys()))
+            extras.difference(
+                set(merge_holder.original_holder._get_unprocessable_keys())
+            )
 
             # pick = merge_holder.pick if (merge_holder.pick is not None) else None
             pick_mon = (
@@ -207,7 +209,9 @@ class Merger:
                 ):
                     continue
                 sound_set: set[Path] = set()
-                if (merge_mon.picked_mon is not None) and (s_mon is merge_mon.picked_mon):
+                if (merge_mon.picked_mon is not None) and (
+                    s_mon is merge_mon.picked_mon
+                ):
                     continue
                 for s_form in s_mon.forms.values():
                     if s_form.sound_entry is not None:
@@ -351,7 +355,15 @@ class Merger:
         self.make_pack_choices(mon_packs=_needs_choice)
 
     def make_pack_choices(self, mon_packs: dict[str, MergePackHolder]):
-        for pok_name, merge_holder in mon_packs.items():
+        _pok_names = list(mon_packs.keys())
+        _ind = 0
+        _max_ind = 0
+
+        while _ind < len(_pok_names):
+            pok_name = _pok_names[_ind]
+            merge_holder = mon_packs[pok_name]
+
+            # for pok_name, merge_holder in mon_packs.items():
             disp, keys = merge_holder.original_holder._display(
                 color=True, only_graphics=True, exclude_merged=True, show_merged=True
             )
@@ -365,31 +377,44 @@ class Merger:
                     inp = keypress("Input pack choice Num[#]: ")
                     if _err is not None:
                         print(clear_line, end="")
-                    try:
-                        inp = int(inp)
-                    except Exception:
-                        _err = inp
-                        continue
-                    if inp > 0 and inp <= len(keys):
+                    if inp == "up":
+                        _ind = max((_ind - 1), 0)
                         break
                     else:
-                        _err = inp
+                        try:
+                            inp = int(inp)
+                        except Exception:
+                            _err = inp
+                            continue
+                        if inp > 0 and inp <= len(keys):
+                            break
+                        else:
+                            _err = inp
                 if _err is not None:
                     print(clear_line)
                 print(clear_line, end="")
 
-                pick = keys[inp - 1]
+                if inp != "up":
+                    pick = keys[inp - 1]
             else:
                 pick = keys[random.randrange(0, len(keys))]
 
-            print(c_text(f"={'-'*15}", color=bcolors.WARNING))
-            print(f"Selected: [{pick}]")
-            print(c_text(f"={'-'*15}", color=bcolors.WARNING))
-            print("=" * 25)
+            if inp != "up":
+                print(c_text(f"={'-'*15}", color=bcolors.WARNING))
+                print(f"Selected: [{pick}]")
+                print(c_text(f"={'-'*15}", color=bcolors.WARNING))
+                print("=" * 25)
 
-            merge_holder.pick = pick
+                merge_holder.pick = pick
 
-            self._mons_to_merge[pok_name] = merge_holder
+                self._mons_to_merge[pok_name] = merge_holder
+                if _ind != _max_ind:
+                    _ind = _max_ind
+                else:
+                    _ind += 1
+                    _max_ind = _ind
+            else:
+                print("=" * 20)
 
     @staticmethod
     def merge(holder: PackHolder, _process_mods: bool = gcr_settings.PROCESS_MODS):
@@ -438,7 +463,9 @@ class Merger:
             for sp_path in form.spawn_pool:
                 if sp_path in path_status:
                     continue
-                if not (data := load_json_from_path(sp_path)):  # TODO change to bcfo data
+                if not (
+                    data := load_json_from_path(sp_path)
+                ):  # TODO change to bcfo data
                     continue
                 flag = True
 
@@ -821,7 +848,8 @@ class Merger:
         )
 
         _all_keys = sorted(
-            _all_keys, key=lambda x: (-sum([(x in sp_ad) for sp_ad in species_additions]))
+            _all_keys,
+            key=lambda x: (-sum([(x in sp_ad) for sp_ad in species_additions])),
         )
 
         for key in _all_keys:
