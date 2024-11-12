@@ -330,6 +330,12 @@ class Combiner:
 
     def _edit_load_order(self) -> None:
         _load_order = self._load_order or [_pack.name for _pack in self.packs]
+        _load_order = [
+            _l for _l in _load_order if _l in [_pack.name for _pack in self.packs]
+        ]
+        for _p in self.packs:
+            if _p.name not in _load_order:
+                _load_order.append(_p.name)
 
         if (new_order := reorder_menu(_load_order)) is not None:
             self._load_order = new_order
