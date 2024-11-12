@@ -19,6 +19,7 @@ class HelperText:
         "On each entry, press the -number- of the pack you want to use"
         f"\n\n{'='*40}\n\n"
     )
+    GENERIC_HELP = ()
 
 
 class DefaultNames:

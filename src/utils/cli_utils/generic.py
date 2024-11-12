@@ -15,3 +15,16 @@ def pack_name_choice(text: str = ""):
     print(f"Selected: [{text}]")
     print(c_text(f"={'-'*15}", color=bcolors.WARNING))
     print("=" * 25)
+
+
+def help_menu():
+    while True:
+        text = (
+            "1. General Operation"
+            "2. Output"
+            "3. Pack View"
+            "4. Pack Choices"
+            "5. Load Order"
+            "6. Settings"
+        )
+        raise NotImplementedError
