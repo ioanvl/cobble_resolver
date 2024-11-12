@@ -35,7 +35,7 @@ class CRSettings:
     COMBINE_POKEMON_MOVES: bool = True
 
     SPECIES_STRICT_KEY_MATCH: bool = False
-    SHOW_WARNING: bool = True
+    SHOW_WARNINGS: bool = True
 
 
 SETTINGS_DEPENDENCIES = {
@@ -49,8 +49,8 @@ SETTINGS_META = {
     "SPECIES_STRICT_KEY_MATCH": SettingMeta(hidden=True),
     # "SHOW_WARNING": SettingMeta(hidden=True),
     # Spacers
-    "POKEDEX_FIX": SettingMeta(after_spacer=True, hidden=True),
-    "PROCESS_MODS": SettingMeta(after_spacer=True),
+    "POKEDEX_FIX": SettingMeta(after_spacer=True),
+    "PROCESS_MODS": SettingMeta(after_spacer=True, hidden=True),
     "COMBINE_POKEMON_MOVES": SettingMeta(after_spacer=True),
 }
 

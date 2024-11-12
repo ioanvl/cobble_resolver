@@ -1,4 +1,4 @@
-from keypress import clear, keypress
+from utils.cli_utils.keypress import clear, keypress
 
 
 def reorder_menu(items):
