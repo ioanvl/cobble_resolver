@@ -63,7 +63,7 @@ class Combiner:
             exit()
 
     def export(self) -> None:
-        line_header("EXPORTING")
+        line_header("Exporting")
         for pack in self.packs:
             if pack.is_base or (pack.is_mod and (not self._process_mods)):
                 continue
@@ -99,7 +99,7 @@ class Combiner:
     def _export_langs(self, folder_path: Path) -> None:
         res_d: dict[str, LangResultEntry] = dict()
         _accounted_merge_picks: set[str] = set()
-        for p in self.packs:
+        for p in self.packs[::-1]:
             if p.is_base or (p.is_mod and (not gcr_settings.PROCESS_MODS)):
                 continue
             l_es: list[LangResultEntry] = p._get_lang_export()
@@ -186,7 +186,7 @@ class Combiner:
     def _export_sound_json(self, folder_path: Path):
         res = dict()
         _accounted_merge_picks: set[str] = set()
-        for p in self.packs:
+        for p in self.packs[::-1]:
             if p.is_base or (p.is_mod and (not gcr_settings.PROCESS_MODS)):
                 continue
             for s_pok in p.pokemon.values():
@@ -274,7 +274,7 @@ class Combiner:
     # ------------------------------------------------------------
 
     def _prepare(self) -> None:
-        line_header("PREPARING")
+        line_header("Preparing")
         self.extraction_path = self.dir_name / ".temp"
         self.extraction_path.mkdir(parents=True, exist_ok=True)
         for p in self.packs:
@@ -307,6 +307,7 @@ class Combiner:
     def _menu(self):
         while True:
             clear()
+            line_header("CobbleResolver")
 
             print("[S]tart\n")
             print("[L]oad Order")
@@ -366,7 +367,7 @@ class Combiner:
     # ------------------------------------------------------------
 
     def _process(self) -> None:
-        line_header("PROCESSING")
+        line_header("Processing")
 
         for p in self.packs:
             p._process()
@@ -374,7 +375,7 @@ class Combiner:
         for p in self.packs:
             self.defined_pokemon.update(list(p.pokemon.keys()))
 
-        line_header("RESOLVING")
+        line_header("Resolving")
 
         if gcr_settings.OP_MODE.value:
             self._merge_v_a()
@@ -525,7 +526,7 @@ class Combiner:
         )
 
     def _resolution_core(self) -> None:
-        line_header("RESOLVING")
+        line_header("Resolving")
         for pok_name in self.defined_pokemon:
             self._resolution_pokemon(pokemon_name=pok_name)
 

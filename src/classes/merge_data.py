@@ -103,7 +103,7 @@ class Merger:
 
     def _merge_final_pokemon(self):
         for pok_name, merge_holder in self._mons_to_merge.items():
-            print(pok_name)
+            # print(pok_name)
 
             if all(
                 [

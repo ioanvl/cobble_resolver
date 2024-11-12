@@ -6,4 +6,4 @@ def bool_square(inp: bool = False) -> str:
 
 
 def line_header(text: str = "") -> None:
-    print(f"\n#{'='*25}\n#  {text.capitalize()}\n#{'='*25}\n")
+    print(f"\n#{'='*25}\n#  {text}\n#{'='*25}\n")
