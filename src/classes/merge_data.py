@@ -144,6 +144,7 @@ class Merger:
                 species_additions=extra_sas,
                 overwrite=False,
                 include=True,
+                exclude_graphics=True,
             )
 
             # _merged_extras_sa = self._extract_against_common(
@@ -160,7 +161,6 @@ class Merger:
                         species_additions=[pick_mon._extracted_sa],
                         overwrite=True,
                         include=True,
-                        exclude_graphics=True,
                     )
 
             # _final_sa["target"] = f"cobblemon:{pok_name}"
