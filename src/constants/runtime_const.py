@@ -8,12 +8,9 @@ from utils.text_utils import bcolors, c_text
 DEBUG: bool = False
 
 
-@dataclass
-class SettingMeta:
-    """Metadata for each setting"""
-
-    hidden: bool = False
-    after_spacer: bool = False  # Add spacer before this setting
+class SettingsMetaType(Enum):
+    OFF = 0
+    ON = 1
 
 
 class CrOpType(Enum):
@@ -22,8 +19,16 @@ class CrOpType(Enum):
 
 
 @dataclass
+class SettingMeta:
+    """Metadata for each setting"""
+
+    hidden: bool = False
+    after_spacer: bool = False  # Add spacer before this setting
+
+
+@dataclass
 class CRSettings:
-    OP_MODE: CrOpType = CrOpType.MERGE
+    OP_MODE: "CrOpType" = CrOpType.MERGE
     KEEP_DUPLICATE_SAS_ON_MOVE: bool = True
     KEEP_DUPLICATE_SPAWNS_ON_MOVE: bool = True
 
@@ -40,6 +45,8 @@ class CRSettings:
 
     AUTO_START: bool = False
 
+    SHOW_ADVANCED_SETTINGS: SettingsMetaType = SettingsMetaType.OFF
+
 
 SETTINGS_DEPENDENCIES = {
     "EXCLUDE_PSEUDOFORMS": lambda s: s.POKEDEX_FIX,
@@ -49,41 +56,46 @@ SETTINGS_DEPENDENCIES = {
 
 SETTINGS_META = {
     # Hidden settings
+    "KEEP_DUPLICATE_SAS_ON_MOVE": SettingMeta(hidden=True),
+    "KEEP_DUPLICATE_SPAWNS_ON_MOVE": SettingMeta(hidden=True),
     "SPECIES_STRICT_KEY_MATCH": SettingMeta(hidden=True),
     "AUTO_START": SettingMeta(hidden=True),
-    # "SHOW_WARNING": SettingMeta(hidden=True),
     # Spacers
     "POKEDEX_FIX": SettingMeta(after_spacer=True),
     "PROCESS_MODS": SettingMeta(after_spacer=True, hidden=True),
     "COMBINE_POKEMON_MOVES": SettingMeta(after_spacer=True),
+    "SHOW_WARNINGS": SettingMeta(after_spacer=True),
+    "SHOW_ADVANCED_SETTINGS": SettingMeta(after_spacer=True),
 }
 
 SETTINGS_META_ADV = {
     # Hidden settings
     "SPECIES_STRICT_KEY_MATCH": SettingMeta(hidden=True),
     "AUTO_START": SettingMeta(hidden=True),
-    # "SHOW_WARNING": SettingMeta(hidden=True),
     # Spacers
     "POKEDEX_FIX": SettingMeta(after_spacer=True),
     "PROCESS_MODS": SettingMeta(after_spacer=True),
     "COMBINE_POKEMON_MOVES": SettingMeta(after_spacer=True),
+    "SHOW_WARNINGS": SettingMeta(after_spacer=True),
+    "SHOW_ADVANCED_SETTINGS": SettingMeta(after_spacer=True),
+}
+
+_setting_meta_dict = {
+    0: SETTINGS_META,
+    1: SETTINGS_META_ADV,
 }
 
 
 def settings_menu(
     settings: CRSettings,
-    show_hidden: bool = False,
     dependencies: Dict = SETTINGS_DEPENDENCIES,
-    meta: Dict = SETTINGS_META,
 ) -> Optional[CRSettings]:
     """
     Interactive menu for modifying settings with dependencies.
 
     Args:
         settings: CRSettings object to modify
-        show_hidden: Whether to show hidden settings
         dependencies: Dictionary of setting dependencies
-        meta: Dictionary of setting metadata
 
     Returns:
         Modified settings object, or None if cancelled
@@ -94,11 +106,8 @@ def settings_menu(
         all_settings = [
             attr for attr in vars(settings).keys() if not attr.startswith("_")
         ]
-        if show_hidden:
-            return all_settings
+        meta = _setting_meta_dict[settings.SHOW_ADVANCED_SETTINGS.value]
         return [s for s in all_settings if not meta.get(s, SettingMeta()).hidden]
-
-    settings_list = get_visible_settings()
 
     def get_setting_value(name: str) -> Union[bool, Enum]:
         return getattr(settings, name)
@@ -123,9 +132,14 @@ def settings_menu(
 
         print("=== Settings ===\n")
 
+        visible_settings = get_visible_settings()
+        if selected_index >= len(visible_settings):
+            selected_index = 0  # Reset the cursor position
+
         visible_index = 0
-        for setting_name in settings_list:
+        for setting_name in visible_settings:
             # Add spacer if needed
+            meta = _setting_meta_dict[settings.SHOW_ADVANCED_SETTINGS.value]
             if meta.get(setting_name, SettingMeta()).after_spacer:
                 print("")
 
@@ -155,7 +169,7 @@ def settings_menu(
 
             visible_index += 1
 
-        print("\n\n↑/↓: Navigate | Space: Toggle/Cycle | Enter: Confirm | ESC: Cancel\n")
+        print("\n\n↑/↓: Navigate | Space: Toggle/Cycle | Enter/ESC: Return \n")
 
         key = keypress()
 
@@ -165,12 +179,10 @@ def settings_menu(
             return settings
         elif key == "up" and selected_index > 0:
             selected_index -= 1
-        elif key == "down" and selected_index < len(settings_list) - 1:
+        elif key == "down" and selected_index < len(visible_settings) - 1:
             selected_index += 1
         elif key == "space":
-            setting_name = settings_list[selected_index]
-            if is_setting_enabled(setting_name):
-                toggle_setting(setting_name)
+            toggle_setting(visible_settings[selected_index])
 
 
 gcr_settings = CRSettings()
