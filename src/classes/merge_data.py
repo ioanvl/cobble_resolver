@@ -158,6 +158,7 @@ class Merger:
                         species_additions=[pick_mon._extracted_sa],
                         overwrite=True,
                         include=True,
+                        exclude_graphics=True,
                     )
 
             # _final_sa["target"] = f"cobblemon:{pok_name}"
@@ -240,25 +241,6 @@ class Merger:
                     target_path=target_path,
                     relative_to=merge_mon.picked_mon.parent_pack.folder_location,
                 )
-                # for p in pok_path_set:
-                #     if p:
-                #         if p.is_dir():
-                #             print(
-                #                 f"[er] - {p}"
-                #             )  # TODO sometimes a "cobblemon\sounds\pokemon"
-                #             continue  # appears here and fucks things up
-                #         np = target_path / p.relative_to(
-                #             merge_mon.picked_mon.parent_pack.folder_location
-                #         )
-                #         np.parent.mkdir(parents=True, exist_ok=True)
-                #         try:
-                #             shutil.move(p, np)
-                #         except Exception:
-                #             if np.exists():
-                #                 pass
-                #             else:
-                #                 print(f"WARN: missed file: {(str(np))[:-25]}")
-                #                 pass
 
             gen = merge_mon.holder._get_generation()
             if not gen:
@@ -828,8 +810,10 @@ class Merger:
         species_additions: list[dict],
         overwrite: bool = True,
         include: bool = True,
+        exclude_graphics: bool = False,
     ):
         _special_form_keys = ["forms", "evolutions"]
+        _graphical_keys = ["behaviour", "baseScale", "hitbox", "height"]
         _outp = {x: y for x, y in species.items()}
 
         _all_keys = list(
@@ -843,6 +827,7 @@ class Merger:
         for key in _all_keys:
             if (
                 (key in _special_form_keys)
+                or ((key in _graphical_keys) and exclude_graphics)
                 or ((key in species) and (not overwrite))
                 or ((key not in species) and (not include))
             ):
@@ -936,6 +921,7 @@ class Merger:
         species_additions: list[list[dict]],
         overwrite: bool = False,
         include: bool = True,
+        exclude_graphics: bool = False,
     ) -> list:
         _base_forms = {form["name"]: form for form in species}
         _all_forms: dict[str, list[dict]] = dict()
@@ -959,6 +945,7 @@ class Merger:
                         species_additions=forms,
                         overwrite=overwrite,
                         include=include,
+                        exclude_graphics=exclude_graphics,
                     )
             else:
                 _base_forms[_key] = Merger._merge_species_with_sas(
@@ -966,6 +953,7 @@ class Merger:
                     species_additions=forms,
                     overwrite=overwrite,
                     include=include,
+                    exclude_graphics=exclude_graphics,
                 )
         return list(_base_forms.values())
 
