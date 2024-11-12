@@ -245,7 +245,10 @@ class Combiner:
         )
 
     def _get_pack_mcmeta(self) -> dict[str, dict[str, Any]]:
-        return {"pack": {"pack_format": 15, "description": "CORE Test"}}
+        return {"pack": {"pack_format": 15, "description": self._get_description()}}
+
+    def _get_description(self):
+        return "Combined pack created with CobblemonResolver"
 
     def _write_pack_mcmeta(self, folder_path: Path) -> None:
         mc = self._get_pack_mcmeta()
@@ -255,7 +258,9 @@ class Combiner:
         for _ in range(3):
             try:
                 shutil.make_archive(
-                    str(folder_path), format="zip", root_dir=str(folder_path)
+                    str(folder_path.parent / DefaultNames.FINAL_PACK_NAME),
+                    format="zip",
+                    root_dir=str(folder_path),
                 )
                 break
             except Exception:

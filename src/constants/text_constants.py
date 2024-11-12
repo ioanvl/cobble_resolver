@@ -16,7 +16,7 @@ class TextSymbols:
 class DefaultNames:
     BASE_FORM = "base_form"
     BASE_COBBLE_MOD = "BASE"
-    FINAL_PACK_NAME = "CORE_Pack"
+    FINAL_PACK_NAME = "CobbleResolver_Pack"
     REMAINDER_PACK_PREFIX = "[CE]"
 
 

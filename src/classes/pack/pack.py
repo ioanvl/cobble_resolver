@@ -294,8 +294,18 @@ class Pack:
 
     def _move_leftovers(self, export_path: Path) -> int | None:
         if x := (len([i for i in self.folder_location.rglob("*") if i.is_dir()])):
+            _tag = ""
+            if (self.folder_location / "assets").exists():
+                _tag += "R"
+            if (self.folder_location / "data").exists():
+                if _tag:
+                    _tag += "|"
+                _tag += "D"
+            if _tag:
+                _tag = "[" + _tag + "]"
+            _tag = DefaultNames.REMAINDER_PACK_PREFIX + _tag
             shutil.make_archive(
-                f"{str((export_path / f"[ce]_{self.name}"))}",
+                f"{str((export_path / f"{_tag}_{self.name}"))}",
                 format="zip",
                 root_dir=str(self.folder_location),
             )
@@ -893,9 +903,9 @@ class Pack:
                     form.resolver_assignments.add(order)
                     flag = True
         if not flag:
-            self.pokemon[pok_name].forms[DefaultNames.BASE_FORM].resolver_assignments.add(
-                order
-            )
+            self.pokemon[pok_name].forms[
+                DefaultNames.BASE_FORM
+            ].resolver_assignments.add(order)
 
         self.pokemon[pok_name].resolvers[order] = new_resolver_entry
 
@@ -1019,7 +1029,9 @@ class Pack:
                             )
                     if "animations" in data:
                         requested.update(
-                            PoserResolver._parse_poser_animation_entry(data["animations"])
+                            PoserResolver._parse_poser_animation_entry(
+                                data["animations"]
+                            )
                         )
 
                     for _, pose_data in (data.get("poses", dict())).items():
