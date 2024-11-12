@@ -11,7 +11,7 @@ from classes.pokemon import Pokemon
 from classes.pokemon_form import PokemonForm
 from constants.runtime_const import gcr_settings, settings_menu
 from constants.text_constants import DefaultNames, HelperText
-from utils.cli_utils.generic import line_header
+from utils.cli_utils.generic import line_header, pack_name_choice
 from utils.cli_utils.keypress import clear, clear_line, keypress, positive_int_choice
 from utils.cli_utils.reorder_list import reorder_menu
 from utils.get_resource import get_resource_path
@@ -22,21 +22,30 @@ from .choice_rules import DualChoise_Risky, DualChoise_Simple
 
 class Combiner:
     def __init__(self, dir_name: Path | None = None):
-        if (not dir_name) or (not dir_name.exists()):
-            self.dir_name = Path(filedialog.askdirectory())
-            if self.dir_name == Path("."):
-                exit()
-        else:
-            self.dir_name = dir_name
-
-        self.output_pack_path = self.dir_name / "output" / "CORE_Pack"
-
         self.extraction_path: str = ""
 
         self.pack_paths: set[Path] = set()
         self.packs: list[Pack] = list()
 
         self.defined_pokemon: set[str] = set()
+
+        # -----------------------
+
+        if (not dir_name) or (not dir_name.exists()):
+            if gcr_settings.AUTO_START:
+                dir_name = self._get_working_dir()
+                if dir_name is None:
+                    exit()
+                else:
+                    self.dir_name = dir_name
+            else:
+                self._menu()
+        else:
+            self.dir_name = dir_name
+
+        self.output_pack_path = self.dir_name / "output" / "CORE_Pack"
+
+        # -----------------------
 
         self._process_mods = False
         self._allow_risky_rules = True
@@ -305,12 +314,17 @@ class Combiner:
         self._reorder_packs()
 
     def _menu(self):
+        _prep_flag = bool(self.packs)
         while True:
             clear()
             line_header("CobbleResolver")
 
-            print("[S]tart\n")
-            print("[L]oad Order")
+            if _prep_flag:
+                print("[S]tart\n")
+                print("[L]oad Order")
+            else:
+                print("[S]elect working folder\n")
+
             print("[O]ptions\n")
             print("[H]elp\n")
             print("[E]xit\n")
@@ -320,13 +334,26 @@ class Combiner:
             if _inp == "e":
                 exit()
             elif _inp == "s":
-                return
-            elif _inp == "l":
+                if _prep_flag:
+                    return
+                else:
+                    if (x := self._get_working_dir()) is not None:
+                        self.dir_name = x
+                        clear()
+                        return
+            elif _inp == "l" and _prep_flag:
                 self._edit_load_order()
             elif _inp == "o":
                 settings_menu(gcr_settings)
             elif _inp == "h":
                 pass
+
+    def _get_working_dir(self) -> None | Path:
+        dir_name = Path(filedialog.askdirectory())
+        if dir_name == Path("."):
+            return None
+        else:
+            return dir_name
 
     def _edit_load_order(self) -> None:
         _load_order = self._load_order or [_pack.name for _pack in self.packs]
@@ -705,7 +732,7 @@ class Combiner:
         print("=" * 25)
 
     def _choose_pack(self, pack_holder: PackHolder):
-        if not self.__helper_message_displayed:
+        if not self.__helper_message_displayed and gcr_settings.SHOW_HELPER_TEXT:
             print(HelperText.AUTO_MANUAL_CHOISE)
             _ = input("Press [Enter] to continue..")
             print(clear_line, end="")
@@ -738,8 +765,11 @@ class Combiner:
 
         selected_key = keys[k_in - 1]
         mons[selected_key].select()
-        print(f"\033[A\r{' '*40}\r", end="")
-        print(f"- {k_in}. [{selected_key}]")
+        print(clear_line, end="")
+
+        pack_name_choice(selected_key)
+
+        # print(f"- {k_in}. [{selected_key}]")
         print("=" * 25)
 
     def _is_selected(self, pokemon_name: str) -> bool:

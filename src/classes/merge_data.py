@@ -12,7 +12,8 @@ from typing import TYPE_CHECKING, Any, Optional
 from classes.base_classes import PackHolder
 from classes.pokemon import MergePokemon
 from constants.runtime_const import gcr_settings
-from constants.text_constants import DefaultNames
+from constants.text_constants import DefaultNames, HelperText
+from utils.cli_utils.generic import pack_name_choice
 from utils.cli_utils.keypress import clear_line, keypress
 from utils.dict_utils import combine
 from utils.dict_utils_transitive import compare
@@ -359,6 +360,11 @@ class Merger:
         _ind = 0
         _max_ind = 0
 
+        if gcr_settings.SHOW_HELPER_TEXT:
+            print(HelperText.AUTO_MANUAL_CHOISE)
+            _ = input("Press [Enter] to continue..")
+            print(clear_line, end="")
+
         while _ind < len(_pok_names):
             pok_name = _pok_names[_ind]
             merge_holder = mon_packs[pok_name]
@@ -400,10 +406,11 @@ class Merger:
                 pick = keys[random.randrange(0, len(keys))]
 
             if inp != "up":
-                print(c_text(f"={'-'*15}", color=bcolors.WARNING))
-                print(f"Selected: [{pick}]")
-                print(c_text(f"={'-'*15}", color=bcolors.WARNING))
-                print("=" * 25)
+                pack_name_choice(pick)
+                # print(c_text(f"={'-'*15}", color=bcolors.WARNING))
+                # print(f"Selected: [{pick}]")
+                # print(c_text(f"={'-'*15}", color=bcolors.WARNING))
+                # print("=" * 25)
 
                 merge_holder.pick = pick
 

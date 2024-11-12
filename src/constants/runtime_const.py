@@ -36,6 +36,9 @@ class CRSettings:
 
     SPECIES_STRICT_KEY_MATCH: bool = False
     SHOW_WARNINGS: bool = True
+    SHOW_HELPER_TEXT: bool = True
+
+    AUTO_START: bool = False
 
 
 SETTINGS_DEPENDENCIES = {
@@ -47,10 +50,22 @@ SETTINGS_DEPENDENCIES = {
 SETTINGS_META = {
     # Hidden settings
     "SPECIES_STRICT_KEY_MATCH": SettingMeta(hidden=True),
+    "AUTO_START": SettingMeta(hidden=True),
     # "SHOW_WARNING": SettingMeta(hidden=True),
     # Spacers
     "POKEDEX_FIX": SettingMeta(after_spacer=True),
     "PROCESS_MODS": SettingMeta(after_spacer=True, hidden=True),
+    "COMBINE_POKEMON_MOVES": SettingMeta(after_spacer=True),
+}
+
+SETTINGS_META_ADV = {
+    # Hidden settings
+    "SPECIES_STRICT_KEY_MATCH": SettingMeta(hidden=True),
+    "AUTO_START": SettingMeta(hidden=True),
+    # "SHOW_WARNING": SettingMeta(hidden=True),
+    # Spacers
+    "POKEDEX_FIX": SettingMeta(after_spacer=True),
+    "PROCESS_MODS": SettingMeta(after_spacer=True),
     "COMBINE_POKEMON_MOVES": SettingMeta(after_spacer=True),
 }
 
