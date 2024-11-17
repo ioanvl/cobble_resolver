@@ -6,7 +6,7 @@ import zipfile
 from dataclasses import dataclass, field
 from json import JSONDecodeError
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from classes.base_classes import (
     Feature,
@@ -656,9 +656,14 @@ class Pack:
         )
 
         forms: list = data.get("forms", list())
-        for i_form in forms:
-            pok.forms[(str(i_form["name"])).lower()] = PokemonForm(
-                name=i_form["name"],
+        for num, i_form in enumerate(forms):
+            _f_name = (
+                i_form.get("name", None)
+                or (i_form.get("aspects", list(f"-unknown-form-{num}")))[0]
+            )
+
+            pok.forms[_f_name.lower()] = PokemonForm(
+                name=_f_name,
                 aspects=(i_form.get("aspects", list())),
                 species=bcfo(file_path=t, source=i_form),
             )
@@ -686,10 +691,14 @@ class Pack:
                     is_addition=is_addition,
                 )
             )
-        for form in data.get("forms", list()):
+        for num, form in enumerate(data.get("forms", list())):
+            _f_name = (
+                form.get("name", None)
+                or (form.get("aspects", list(f"-unknown-form-{num}")))[0]
+            )
             self._register_evolutions(
                 data=form,
-                name=f"{name}_{form['name']}",
+                name=f"{name}_{_f_name}",
                 file_path=file_path,
                 is_addition=is_addition,
             )
@@ -815,16 +824,24 @@ class Pack:
                 elif feat_name.lower() == "form":  # fix other dumb stuff
                     aspect = feat_choice.lower()
                 else:
-                    selected = ""
+                    # selected = ""
                     if feat_name in available_features:
-                        selected = available_features[feat_name].source["aspectFormat"]
+                        # selected = available_features[feat_name].source["aspectFormat"]
+                        aspect = Pack._aspect_choice_retrieve(
+                            feature_dict=available_features[feat_name].source,
+                            feat_choice=feat_choice,
+                        )
                     else:
                         for val in available_features.values():
                             if feat_name in val.keys:
-                                selected = val.source["aspectFormat"]
+                                # selected = val.source["aspectFormat"]
+                                aspect = Pack._aspect_choice_retrieve(
+                                    feature_dict=val.source,
+                                    feat_choice=feat_choice,
+                                )
                                 break
-                    if selected:
-                        aspect = selected.replace("{{choice}}", feat_choice)
+                    # if selected:
+                    #     aspect = selected.replace("{{choice}}", feat_choice)
             else:
                 aspect = feat_parts[0]
         if not aspect:
@@ -835,6 +852,17 @@ class Pack:
                 )
                 pok_name = feat_parts[0]
         return pok_name, aspect
+
+    @staticmethod
+    def _aspect_choice_retrieve(feature_dict: dict[str:Any], feat_choice: str):
+        if "aspectFormat" in feature_dict:
+            aspect = feature_dict["aspectFormat"].replace("{{choice}}", feat_choice)
+        elif "choices" in feature_dict:
+            if feat_choice in feature_dict["choices"]:
+                aspect = feat_choice
+        else:
+            aspect = ""
+        return aspect
 
     @staticmethod
     def _match_aspect_to_form(aspect: str, pokemon: Pokemon) -> list[PokemonForm]:
