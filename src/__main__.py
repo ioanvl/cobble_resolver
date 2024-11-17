@@ -15,11 +15,13 @@ if __name__ == "__main__":
         )
         _ = input(_tex)
     gcr_settings.OP_MODE = CrOpType(1)
-    try:
-        comb = Combiner()
-        comb.run()
-    except Exception as e:
-        print("An ERROR occured:")
-        print(e)
-
+    # try:
+    comb = Combiner()
+    comb.run()
     _ = input("\n\nPress [Enter] to exit..")
+    # except Exception as e:
+    #     print("An ERROR occured:")
+    #     print(e)
+
+    #     _ = input("\n\nPress [Enter] to exit..")
+    #     raise e

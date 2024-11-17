@@ -178,8 +178,8 @@ class Combiner:
                                             color=bcolors.WARNING,
                                         )
                                     )
-                                if f"{entry.name}_{l_key}" not in _accounted_merge_picks:
-                                    res_d[entry.name].data[l_key] = l_entry
+                            if f"{entry.name}_{l_key}" not in _accounted_merge_picks:
+                                res_d[entry.name].data[l_key] = l_entry
                         else:
                             if p.pokemon[l_name].merged:
                                 if p.pokemon[l_name].merge_pick:
@@ -195,7 +195,7 @@ class Combiner:
         export_path = folder_path / "assets" / "cobblemon" / "lang"
         export_path.mkdir(parents=True, exist_ok=True)
         for l_entry in res_d.values():
-            (export_path / l_entry.name).write_text(json.dumps(l_entry.data))
+            (export_path / l_entry.name).write_text(json.dumps(l_entry.data, indent=4))
 
     def _export_sound_json(self, folder_path: Path):
         res = dict()
