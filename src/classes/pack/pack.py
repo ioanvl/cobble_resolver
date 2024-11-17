@@ -40,7 +40,7 @@ class PackLocations:
 
     resolvers: set[Path] = field(default_factory=set)
     models: set[Path] = field(default_factory=set)
-    textures: Path | None = None
+    textures: set[Path] = field(default_factory=set)
     animations: set[Path] = field(default_factory=set)
     posers: set[Path] = field(default_factory=set)
 
@@ -81,7 +81,7 @@ class PackLocations:
             or bool(self.models)
             or bool(self.animations)
             or bool(self.posers)
-            or (self.textures is not None)
+            or bool(self.textures)
             or (self.lang is not None)
             or bool(self.species)
             or bool(self.species_additions)
@@ -93,11 +93,11 @@ class PackLocations:
     def _delete_registered_paths(self) -> None:
         for x in [
             self.lang,
-            self.textures,
         ]:
             if x and x.exists() and x.is_dir():
                 shutil.rmtree(x)
         for y in [
+            self.textures,
             self.animations,  #
             self.models,  #
             self.posers,  #
@@ -468,7 +468,7 @@ class Pack:
                 if (x := (tmpast / "lang")).exists():
                     val.lang = x
                 if (x := (tmpast / "textures" / "pokemon")).exists():
-                    val.textures = x
+                    val.textures.add(x)
                 if (x := (tmpast / "sounds" / "pokemon")).exists():
                     val.sounds = x
                 if (x := (tmpast / "sounds.json")).exists():
@@ -857,8 +857,8 @@ class Pack:
             for t in t_set.rglob("*.json"):
                 self.component_location.models_dict[t.stem] = t
 
-        if self.component_location.textures:
-            for t in self.component_location.textures.rglob("*.png"):
+        for t_set in self.component_location.textures:
+            for t in t_set.rglob("*.png"):
                 self.component_location.textures_dict[t.stem] = t
 
         self._get_looks_resolvers()
@@ -942,7 +942,8 @@ class Pack:
                         )
                         del self.component_location.models_dict[model_name]
 
-        if self.component_location.textures:
+        for _temp_ in self.component_location.textures:
+            # if self.component_location.textures:
             if x := entry.get("texture", ""):
                 t_entries = list()
                 if isinstance(x, dict):
@@ -956,9 +957,7 @@ class Pack:
                         index = parts.index("pokemon")
                         partial_path = "/".join(parts[index + 1 :])
 
-                        if (
-                            epath := self.component_location.textures / partial_path
-                        ).exists():
+                        if (epath := _temp_ / partial_path).exists():
                             existing_resolver.textures.add(epath)
                             if epath.stem in self.component_location.textures_dict:
                                 del self.component_location.textures_dict[epath.stem]
