@@ -28,7 +28,7 @@ from utils.cli_utils.generic import bool_square
 from utils.cli_utils.keypress import clear_line
 from utils.directory_utils import clear_empty_dir
 from utils.safe_parse_deco import safe_parse_per_file
-from utils.text_utils import next_candidate_name
+from utils.text_utils import bcolors, c_text, next_candidate_name
 
 if TYPE_CHECKING:
     from classes.combiner import Combiner
@@ -861,6 +861,16 @@ class Pack:
             if feat_choice in feature_dict["choices"]:
                 aspect = feat_choice
         else:
+            if gcr_settings.SHOW_WARNINGS:
+                print(
+                    c_text(
+                        (
+                            "--! Unmatched feature/aspect: "
+                            f"{feature_dict.get("keys", list('-'))[0]}:{feat_choice}"
+                        ),
+                        bcolors.WARNING,
+                    )
+                )
             aspect = ""
         return aspect
 
