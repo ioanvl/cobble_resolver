@@ -247,7 +247,7 @@ class Combiner:
         for key in res:
             res[key] = list(res[key])
 
-        outp_text = "Many thanks to the creators of these packs of their work"
+        outp_text = "Many thanks to the creators of these packs for their work"
 
         return (
             outp_text

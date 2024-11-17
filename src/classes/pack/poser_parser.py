@@ -81,7 +81,7 @@ class PoserResolver:
                     return PoserResolver._extract_poser_animation_line(
                         poser_line=poser_line
                     )
-        except:
+        except:  # handle this better
             pass
         return ("", "")
 
