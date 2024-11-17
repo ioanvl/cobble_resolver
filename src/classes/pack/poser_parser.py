@@ -75,11 +75,14 @@ class PoserResolver:
         if not poser_line:
             return ("", "")
 
-        for stw in ["q.bedrock", "q.bedrock_quirk", "bedrock"]:
-            if poser_line.startswith(stw):
-                return PoserResolver._extract_poser_animation_line(
-                    poser_line=poser_line
-                )
+        try:
+            for stw in ["q.bedrock", "q.bedrock_quirk", "bedrock"]:
+                if poser_line.startswith(stw):
+                    return PoserResolver._extract_poser_animation_line(
+                        poser_line=poser_line
+                    )
+        except:
+            pass
         return ("", "")
 
     @staticmethod

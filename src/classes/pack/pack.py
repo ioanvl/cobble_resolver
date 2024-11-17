@@ -6,7 +6,7 @@ import zipfile
 from dataclasses import dataclass, field
 from json import JSONDecodeError
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Iterable
 
 from classes.base_classes import (
     Feature,
@@ -638,9 +638,25 @@ class Pack:
 
     # ------------------------------------------------------------
 
+    @staticmethod
+    def _check_empty_species_dict(data: dict) -> bool:
+        _ignored_keys = ["implemented"]
+        flag = False
+        for key, val in data.items():
+            if key in _ignored_keys:
+                continue
+            if isinstance(val, Iterable):
+                if val:
+                    flag = True
+            else:
+                flag = True
+        return flag
+
     @safe_parse_per_file(component_attr="species", DEBUG=DEBUG)
     def _get_data_species(self, t: Path, data: dict) -> None:  # STEP 1
         """parse through species files"""
+        if not self._check_empty_species_dict(data=data):
+            return
         pok = Pokemon(
             internal_name=t.stem,
             name=data["name"],
