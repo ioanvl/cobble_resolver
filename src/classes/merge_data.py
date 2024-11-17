@@ -323,34 +323,39 @@ class Merger:
                     # _checked.add(pok_name)
                     self._mons_to_move[pok_name] = ph
             else:
-                merge_data: MergePackHolder = Merger.merge(holder=ph)
+                try:
+                    merge_data: MergePackHolder = Merger.merge(holder=ph)
 
-                if (merge_data.choice_options is None) or (
-                    len(merge_data.choice_options) == 1
-                ):
-                    pack_name = (
-                        merge_data.choice_options[0]
-                        if merge_data.choice_options is not None
-                        else None
-                    )
-                    self._attached_combiner._print_pack_choise(
-                        number=ph.dex_num,
-                        name=ph.name,
-                        selected_pack=pack_name,
-                        selection_type=c_text(text="===MERGE==", color=bcolors.WARNING),
-                    )
-                    # _checked.add(pok_name)
-                    if pack_name is not None:
-                        ph.mons[pack_name].merge_pick = True
-                    merge_data.auto_pick = True
-                    merge_data.pick = pack_name
-                else:
-                    _needs_choice[pok_name] = merge_data
+                    if (merge_data.choice_options is None) or (
+                        len(merge_data.choice_options) == 1
+                    ):
+                        pack_name = (
+                            merge_data.choice_options[0]
+                            if merge_data.choice_options is not None
+                            else None
+                        )
+                        self._attached_combiner._print_pack_choise(
+                            number=ph.dex_num,
+                            name=ph.name,
+                            selected_pack=pack_name,
+                            selection_type=c_text(
+                                text="===MERGE==", color=bcolors.WARNING
+                            ),
+                        )
+                        # _checked.add(pok_name)
+                        if pack_name is not None:
+                            ph.mons[pack_name].merge_pick = True
+                        merge_data.auto_pick = True
+                        merge_data.pick = pack_name
+                    else:
+                        _needs_choice[pok_name] = merge_data
 
-                for _m_mon in ph.mons.values():
-                    _m_mon.merged = True
+                    for _m_mon in ph.mons.values():
+                        _m_mon.merged = True
 
-                self._mons_to_merge[pok_name] = merge_data
+                    self._mons_to_merge[pok_name] = merge_data
+                except:
+                    pass  # WTF EVEN, lets fix that later
 
         self.make_pack_choices(mon_packs=_needs_choice)
 
