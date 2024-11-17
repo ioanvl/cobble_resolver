@@ -139,8 +139,8 @@ class Combiner:
                             _name_attempts.add(l_name)
                             l_name = "".join(l_name.split("_"))
 
+                        _selected_att = None
                         if l_name not in p.pokemon:
-                            _selected_att = None
                             _name_attempts.add(l_name)
                             for _attempt_pok in p.pokemon.values():
                                 if _attempt_pok.internal_name in _name_attempts:
@@ -178,16 +178,24 @@ class Combiner:
                                             color=bcolors.WARNING,
                                         )
                                     )
-                                if f"{entry.name}_{l_key}" not in _accounted_merge_picks:
-                                    res_d[entry.name].data[l_key] = l_entry
+                            # if f"{entry.name}_{l_key}" not in _accounted_merge_picks:
+                            #     res_d[entry.name].data[l_key] = l_entry
+
+                        _selected_pok = None
+                        if l_name in p.pokemon:
+                            _selected_pok = p.pokemon[l_name]
+                        elif _selected_att is not None:
+                            _selected_pok = _selected_att
+
+                        if _selected_pok is not None:
+                            if (_selected_pok.merged and _selected_pok.merge_pick) or (
+                                _selected_pok.selected
+                            ):
+                                res_d[entry.name].data[l_key] = l_entry
+                                _accounted_merge_picks.add(f"{entry.name}_{l_key}")
                         else:
-                            if p.pokemon[l_name].merged:
-                                if p.pokemon[l_name].merge_pick:
-                                    res_d[entry.name].data[l_key] = l_entry
-                                    _accounted_merge_picks.add(f"{entry.name}_{l_key}")
-                            else:
-                                if f"{entry.name}_{l_key}" not in _accounted_merge_picks:
-                                    res_d[entry.name].data[l_key] = l_entry
+                            if f"{entry.name}_{l_key}" not in _accounted_merge_picks:
+                                res_d[entry.name].data[l_key] = l_entry
 
                     else:
                         res_d[entry.name].data[l_key] = l_entry
@@ -195,7 +203,7 @@ class Combiner:
         export_path = folder_path / "assets" / "cobblemon" / "lang"
         export_path.mkdir(parents=True, exist_ok=True)
         for l_entry in res_d.values():
-            (export_path / l_entry.name).write_text(json.dumps(l_entry.data))
+            (export_path / l_entry.name).write_text(json.dumps(l_entry.data, indent=4))
 
     def _export_sound_json(self, folder_path: Path):
         res = dict()
@@ -239,7 +247,7 @@ class Combiner:
         for key in res:
             res[key] = list(res[key])
 
-        outp_text = "Many thanks to the creators of these packs of their work"
+        outp_text = "Many thanks to the creators of these packs for their work"
 
         return (
             outp_text

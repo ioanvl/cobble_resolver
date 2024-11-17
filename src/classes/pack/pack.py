@@ -6,7 +6,7 @@ import zipfile
 from dataclasses import dataclass, field
 from json import JSONDecodeError
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Iterable
 
 from classes.base_classes import (
     Feature,
@@ -28,7 +28,7 @@ from utils.cli_utils.generic import bool_square
 from utils.cli_utils.keypress import clear_line
 from utils.directory_utils import clear_empty_dir
 from utils.safe_parse_deco import safe_parse_per_file
-from utils.text_utils import next_candidate_name
+from utils.text_utils import bcolors, c_text, next_candidate_name
 
 if TYPE_CHECKING:
     from classes.combiner import Combiner
@@ -40,7 +40,7 @@ class PackLocations:
 
     resolvers: set[Path] = field(default_factory=set)
     models: set[Path] = field(default_factory=set)
-    textures: Path | None = None
+    textures: set[Path] = field(default_factory=set)
     animations: set[Path] = field(default_factory=set)
     posers: set[Path] = field(default_factory=set)
 
@@ -81,7 +81,7 @@ class PackLocations:
             or bool(self.models)
             or bool(self.animations)
             or bool(self.posers)
-            or (self.textures is not None)
+            or bool(self.textures)
             or (self.lang is not None)
             or bool(self.species)
             or bool(self.species_additions)
@@ -93,11 +93,11 @@ class PackLocations:
     def _delete_registered_paths(self) -> None:
         for x in [
             self.lang,
-            self.textures,
         ]:
             if x and x.exists() and x.is_dir():
                 shutil.rmtree(x)
         for y in [
+            self.textures,
             self.animations,  #
             self.models,  #
             self.posers,  #
@@ -468,7 +468,7 @@ class Pack:
                 if (x := (tmpast / "lang")).exists():
                     val.lang = x
                 if (x := (tmpast / "textures" / "pokemon")).exists():
-                    val.textures = x
+                    val.textures.add(x)
                 if (x := (tmpast / "sounds" / "pokemon")).exists():
                     val.sounds = x
                 if (x := (tmpast / "sounds.json")).exists():
@@ -638,9 +638,25 @@ class Pack:
 
     # ------------------------------------------------------------
 
+    @staticmethod
+    def _check_empty_species_dict(data: dict) -> bool:
+        _ignored_keys = ["implemented"]
+        flag = False
+        for key, val in data.items():
+            if key in _ignored_keys:
+                continue
+            if isinstance(val, Iterable):
+                if val:
+                    flag = True
+            else:
+                flag = True
+        return flag
+
     @safe_parse_per_file(component_attr="species", DEBUG=DEBUG)
     def _get_data_species(self, t: Path, data: dict) -> None:  # STEP 1
         """parse through species files"""
+        if not self._check_empty_species_dict(data=data):
+            return
         pok = Pokemon(
             internal_name=t.stem,
             name=data["name"],
@@ -656,9 +672,14 @@ class Pack:
         )
 
         forms: list = data.get("forms", list())
-        for i_form in forms:
-            pok.forms[(str(i_form["name"])).lower()] = PokemonForm(
-                name=i_form["name"],
+        for num, i_form in enumerate(forms):
+            _f_name = (
+                i_form.get("name", None)
+                or (i_form.get("aspects", list(f"-unknown-form-{num}")))[0]
+            )
+
+            pok.forms[_f_name.lower()] = PokemonForm(
+                name=_f_name,
                 aspects=(i_form.get("aspects", list())),
                 species=bcfo(file_path=t, source=i_form),
             )
@@ -686,10 +707,14 @@ class Pack:
                     is_addition=is_addition,
                 )
             )
-        for form in data.get("forms", list()):
+        for num, form in enumerate(data.get("forms", list())):
+            _f_name = (
+                form.get("name", None)
+                or (form.get("aspects", list(f"-unknown-form-{num}")))[0]
+            )
             self._register_evolutions(
                 data=form,
-                name=f"{name}_{form['name']}",
+                name=f"{name}_{_f_name}",
                 file_path=file_path,
                 is_addition=is_addition,
             )
@@ -815,16 +840,24 @@ class Pack:
                 elif feat_name.lower() == "form":  # fix other dumb stuff
                     aspect = feat_choice.lower()
                 else:
-                    selected = ""
+                    # selected = ""
                     if feat_name in available_features:
-                        selected = available_features[feat_name].source["aspectFormat"]
+                        # selected = available_features[feat_name].source["aspectFormat"]
+                        aspect = Pack._aspect_choice_retrieve(
+                            feature_dict=available_features[feat_name].source,
+                            feat_choice=feat_choice,
+                        )
                     else:
                         for val in available_features.values():
                             if feat_name in val.keys:
-                                selected = val.source["aspectFormat"]
+                                # selected = val.source["aspectFormat"]
+                                aspect = Pack._aspect_choice_retrieve(
+                                    feature_dict=val.source,
+                                    feat_choice=feat_choice,
+                                )
                                 break
-                    if selected:
-                        aspect = selected.replace("{{choice}}", feat_choice)
+                    # if selected:
+                    #     aspect = selected.replace("{{choice}}", feat_choice)
             else:
                 aspect = feat_parts[0]
         if not aspect:
@@ -835,6 +868,27 @@ class Pack:
                 )
                 pok_name = feat_parts[0]
         return pok_name, aspect
+
+    @staticmethod
+    def _aspect_choice_retrieve(feature_dict: dict[str:Any], feat_choice: str):
+        if "aspectFormat" in feature_dict:
+            aspect = feature_dict["aspectFormat"].replace("{{choice}}", feat_choice)
+        elif "choices" in feature_dict:
+            if feat_choice in feature_dict["choices"]:
+                aspect = feat_choice
+        else:
+            if gcr_settings.SHOW_WARNINGS:
+                print(
+                    c_text(
+                        (
+                            "--! Unmatched feature/aspect: "
+                            f"{feature_dict.get("keys", list('-'))[0]}:{feat_choice}"
+                        ),
+                        bcolors.WARNING,
+                    )
+                )
+            aspect = ""
+        return aspect
 
     @staticmethod
     def _match_aspect_to_form(aspect: str, pokemon: Pokemon) -> list[PokemonForm]:
@@ -857,8 +911,8 @@ class Pack:
             for t in t_set.rglob("*.json"):
                 self.component_location.models_dict[t.stem] = t
 
-        if self.component_location.textures:
-            for t in self.component_location.textures.rglob("*.png"):
+        for t_set in self.component_location.textures:
+            for t in t_set.rglob("*.png"):
                 self.component_location.textures_dict[t.stem] = t
 
         self._get_looks_resolvers()
@@ -942,7 +996,8 @@ class Pack:
                         )
                         del self.component_location.models_dict[model_name]
 
-        if self.component_location.textures:
+        for _temp_ in self.component_location.textures:
+            # if self.component_location.textures:
             if x := entry.get("texture", ""):
                 t_entries = list()
                 if isinstance(x, dict):
@@ -956,9 +1011,7 @@ class Pack:
                         index = parts.index("pokemon")
                         partial_path = "/".join(parts[index + 1 :])
 
-                        if (
-                            epath := self.component_location.textures / partial_path
-                        ).exists():
+                        if (epath := _temp_ / partial_path).exists():
                             existing_resolver.textures.add(epath)
                             if epath.stem in self.component_location.textures_dict:
                                 del self.component_location.textures_dict[epath.stem]
