@@ -43,7 +43,7 @@ class CRSettings:
     SHOW_WARNINGS: bool = True
     SHOW_HELPER_TEXT: bool = True
 
-    AUTO_START: bool = True
+    AUTO_START: bool = False
     AUTO_LOAD_ORDER_MODE: bool = False
     ALTERNATE_ICON: bool = False
 
