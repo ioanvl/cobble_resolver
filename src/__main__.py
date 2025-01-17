@@ -20,7 +20,7 @@ if __name__ == "__main__":
         comb.run()
         _ = input("\n\nPress [Enter] to exit..")
     except Exception as e:
-        print("An ERROR occured - Traceback:")
-        print(e.with_traceback())
+        print("An ERROR occured:")
+        print(e)
 
         _ = input("\n\nPress [Enter] to exit..")
