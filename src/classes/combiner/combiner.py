@@ -305,11 +305,19 @@ class Combiner:
         self.extraction_path = self.dir_name / ".temp"
         self.extraction_path.mkdir(parents=True, exist_ok=True)
         for p in self.packs:
-            p._extraction_path = self.extraction_path
+            try:
+                p._extraction_path = self.extraction_path
+                p._prepare()
+                print("")
+            except Exception as e:
+                print(f"\n{c_text(f"{'='*40}", color=bcolors.FAIL)}")
+                nme = p.name or (p.zip_location.name or p.folder_location.name)
+                print(f"Fatal error unpacking [{nme}] - ignoring pack.")
+                print(f"\nError msg ->\n {e}")
 
-        for p in self.packs:
-            p._prepare()
-            print("")
+                print(f"\n{c_text(f"{'='*40}", color=bcolors.FAIL)}")
+
+                p.component_location = None
 
         self._remove_empty_packs()
 
