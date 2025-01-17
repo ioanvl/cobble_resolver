@@ -305,11 +305,25 @@ class Combiner:
         self.extraction_path = self.dir_name / ".temp"
         self.extraction_path.mkdir(parents=True, exist_ok=True)
         for p in self.packs:
-            p._extraction_path = self.extraction_path
+            if p:
+                try:
+                    p._extraction_path = self.extraction_path
+                    p._prepare()
+                    print("")
+                except Exception as e:
+                    print("\n\n")
+                    print(f"{c_text(f"{'='*40}", color=bcolors.FAIL)}")
+                    nme = p.name or (
+                        p.zip_location.name
+                        if p.zip_location
+                        else (p.folder_location.name if p.folder_location else "")
+                    )
+                    print(f"Fatal error unpacking [{nme}] - ignoring pack.")
+                    print(f"\nError msg ->\n {e or '[missing]'}")
 
-        for p in self.packs:
-            p._prepare()
-            print("")
+                    print(f"{c_text(f"{'='*40}", color=bcolors.FAIL)}")
+
+                    p.component_location = None
 
         self._remove_empty_packs()
 
@@ -412,7 +426,7 @@ class Combiner:
 
     def _remove_empty_packs(self) -> None:
         for p in self.packs:
-            if not bool(p.component_location):
+            if (not isinstance(p, Pack)) or (not bool(p.component_location)):
                 self.packs.remove(p)
 
     # ------------------------------------------------------------
