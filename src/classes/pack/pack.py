@@ -147,6 +147,13 @@ class Pack:
         self.parent_combiner: "Combiner" | None = None
         self.verbose: bool = False
 
+    def get_name(self) -> str:
+        return self.name or (
+            self.zip_location.name
+            if self.zip_location
+            else (self.folder_location.name if self.folder_location else "")
+        )
+
     def run(self) -> None:
         self._prepare()
         self._process()
@@ -429,23 +436,24 @@ class Pack:
                 self.folder_location / "common" / "src" / "main" / "resources"
             )
             return
-        if (self.folder_location / "LICENSE").exists():
+
+        if any(self.folder_location.glob("*mixins*.json")):
             self.is_mod = True
 
             check = [c for c in self.folder_location.rglob("*cobblemon-common*")]
             if len(check):
                 self.is_base = True
                 return
-        if (x := (self.folder_location / "fabric.mod.json")).exists():
-            self.is_mod = True
-            try:
-                with x.open() as f:
-                    data = json.load(f)
-                    if data.get("id", "") == "cobblemon":
-                        self.is_base = True
-                        return
-            except Exception:
-                pass
+            else:
+                if (x := (self.folder_location / "fabric.mod.json")).exists():
+                    try:
+                        with x.open() as f:
+                            data = json.load(f)
+                            if data.get("id", "") == "cobblemon":
+                                self.is_base = True
+                                return
+                    except Exception:
+                        pass
 
     def _get_paths(self) -> None:
         val = PackLocations()
