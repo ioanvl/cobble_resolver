@@ -313,12 +313,8 @@ class Combiner:
                 except Exception as e:
                     print("\n\n")
                     print(f"{c_text(f"{'='*40}", color=bcolors.FAIL)}")
-                    nme = p.name or (
-                        p.zip_location.name
-                        if p.zip_location
-                        else (p.folder_location.name if p.folder_location else "")
-                    )
-                    print(f"Fatal error unpacking [{nme}] - ignoring pack.")
+
+                    print(f"Fatal error unpacking [{p.get_name()}] - ignoring pack.")
                     print(f"\nError msg ->\n {e or '[missing]'}")
 
                     print(f"{c_text(f"{'='*40}", color=bcolors.FAIL)}")
@@ -425,9 +421,14 @@ class Combiner:
         self.packs = _new_order_list
 
     def _remove_empty_packs(self) -> None:
+        flag = False
         for p in self.packs:
             if (not isinstance(p, Pack)) or (not bool(p.component_location)):
+                print(c_text(text=f"{p.get_name()} - ignored.", color=bcolors.FAIL))
+                flag = True
                 self.packs.remove(p)
+        if flag:
+            _ = input("\n\nPress [Enter] to continue..")
 
     # ------------------------------------------------------------
 
